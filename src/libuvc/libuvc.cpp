@@ -284,6 +284,7 @@ namespace librealsense
                 if (res < 0) {
                     uvc_unref_device(_device);
                     _device = NULL;
+                    _device_handle = NULL;
                     throw linux_backend_exception("Could not open device.");
                 }
 
@@ -446,6 +447,8 @@ namespace librealsense
 
             int32_t get_data_usb( uvc_req_code action, int control, int unit) const {
                 unsigned char buffer[4];
+
+                if (!_device_handle) throw linux_backend_exception("Device not opened!");
 
                 int status = libusb_control_transfer(_device_handle->usb_devh,
                                                      UVC_REQ_TYPE_GET,
@@ -766,7 +769,7 @@ namespace librealsense
                 return results;
             }
 
-            std::shared_ptr<command_transfer> create_usb_device(usb_device_info info) const
+            std::shared_ptr<command_transfer> create_usb_device(usb_device_info info) const override
             {
                 auto dev = usb_enumerator::create_usb_device(info);
                 if(dev != nullptr)
@@ -774,7 +777,7 @@ namespace librealsense
                 return nullptr;
             }
 
-            std::vector<usb_device_info> query_usb_devices() const
+            std::vector<usb_device_info> query_usb_devices() const override
             {
                 return usb_enumerator::query_devices_info();
             }
