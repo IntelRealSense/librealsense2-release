@@ -1,4 +1,4 @@
-option(ENABLE_CCACHE "Build with ccache." ON)
+option(ENABLE_CCACHE "Build with ccache." OFF)
 option(BUILD_WITH_CUDA "Enable CUDA" OFF)
 option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples and tools. Implies BUILD_GLSL_EXTENSIONS" OFF)
 option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
