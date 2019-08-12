@@ -14,10 +14,10 @@ tracks:
       :{release_inc}
     devel_branch: null
     last_release: v2.25.0
-    last_version: 2.25.0
+    last_version: 2.25.2
     name: upstream
     patches: null
-    release_inc: '3'
+    release_inc: '1'
     release_repo_url: null
     release_tag: :{version}
     ros_distro: kinetic
