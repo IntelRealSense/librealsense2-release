@@ -16,7 +16,7 @@ export LDFLAGS=
 export PKG_CONFIG_PATH=@(InstallationPrefix)/lib/pkgconfig
 # Explicitly enable -DNDEBUG, see:
 # 	https://github.com/ros-infrastructure/bloom/issues/327
-export DEB_CXXFLAGS_MAINT_APPEND=-DNDEBUG
+export DEB_CXXFLAGS_MAINT_APPEND=-DNDEBUG -DENABLE_CCACHE=false -DBUILD_GRAPHICAL_EXAMPLES=false -DBUILD_EXAMPLES=false -DFORCE_LIBUVC=true
 
 %:
 	dh $@@ -v --buildsystem=cmake
