@@ -19,8 +19,8 @@ tracks:
     patches: null
     release_inc: '1'
     release_repo_url: null
-    release_tag: :{version}
+    release_tag: v:{version}
     ros_distro: kinetic
     vcs_type: git
-    vcs_uri: https://github.com/doronhi/librealsense.git
-    version: 2.25.2
+    vcs_uri: https://github.com/IntelRealSense/librealsense.git
+    version: 2.28.0
