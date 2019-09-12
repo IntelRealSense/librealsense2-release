@@ -13,6 +13,7 @@
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/zero-order.h"
+#include "std_msgs/Float32MultiArray.h"
 
 namespace librealsense
 {
@@ -798,6 +799,48 @@ namespace librealsense
         sensor_extensions[RS2_EXTENSION_RECOMMENDED_FILTERS] = proccesing_blocks;
     }
 
+    ivcam2::intrinsic_depth ros_reader::ros_l500_depth_data_to_intrinsic_depth(ros_reader::l500_depth_data data)
+    {
+        ivcam2::intrinsic_depth res;
+        res.resolution.num_of_resolutions = data.num_of_resolution;
+
+        for (auto i = 0;i < data.num_of_resolution; i++)
+        {
+            res.resolution.intrinsic_resolution[i].raw.pinhole_cam_model.width = data.data[i].res_raw.x;
+            res.resolution.intrinsic_resolution[i].raw.pinhole_cam_model.height = data.data[i].res_raw.y;
+            res.resolution.intrinsic_resolution[i].raw.zo.x = data.data[i].zo_raw.x;
+            res.resolution.intrinsic_resolution[i].raw.zo.y = data.data[i].zo_raw.y;
+
+            res.resolution.intrinsic_resolution[i].world.pinhole_cam_model.width = data.data[i].res_world.x;
+            res.resolution.intrinsic_resolution[i].world.pinhole_cam_model.height = data.data[i].res_world.y;
+            res.resolution.intrinsic_resolution[i].world.zo.x = data.data[i].zo_world.x;
+            res.resolution.intrinsic_resolution[i].world.zo.y = data.data[i].zo_world.y;
+
+        }
+        return res;
+    }
+
+    void ros_reader::update_l500_depth_sensor(const rosbag::Bag & file, uint32_t sensor_index, const nanoseconds & time, uint32_t file_version, snapshot_collection & sensor_extensions, uint32_t version, std::string pid, std::string sensor_name)
+    {
+        //Taking all messages from the beginning of the bag until the time point requested
+        std::string l500_depth_intrinsics_topic = ros_topic::l500_data_blocks_topic({ get_device_index(), sensor_index });
+
+        rosbag::View option_view(file, rosbag::TopicQuery(l500_depth_intrinsics_topic), to_rostime(get_static_file_info_timestamp()), to_rostime(time));
+        auto it = option_view.begin();
+
+        auto depth_to_disparity = true;
+
+        rosbag::View::iterator last_item;
+
+        while (it != option_view.end())
+        {
+            last_item = it++;
+            auto l500_intrinsic = create_l500_intrinsic_depth(*last_item);
+
+            sensor_extensions[RS2_EXTENSION_L500_DEPTH_SENSOR] = std::make_shared<l500_depth_sensor_snapshot>(ros_l500_depth_data_to_intrinsic_depth(l500_intrinsic), l500_intrinsic.baseline);
+        }
+    }
+
     bool ros_reader::is_depth_sensor(std::string sensor_name)
     {
         if (sensor_name.compare("Stereo Module") == 0 || sensor_name.compare("Coded-Light Depth Sensor") == 0)
@@ -893,10 +936,7 @@ namespace librealsense
         {
             if (is_depth_sensor(sensor_name))
             {
-                auto zo_point_x = std::shared_ptr<option>(&options->get_option(RS2_OPTION_ZERO_ORDER_POINT_X), [](option*) {});
-                auto zo_point_y = std::shared_ptr<option>(&options->get_option(RS2_OPTION_ZERO_ORDER_POINT_Y), [](option*) {});
-
-                return std::make_shared<recommended_proccesing_blocks_snapshot>(l500_depth_sensor::get_l500_recommended_proccesing_blocks(zo_point_x, zo_point_y));
+                return std::make_shared<recommended_proccesing_blocks_snapshot>(l500_depth_sensor::get_l500_recommended_proccesing_blocks());
             }
             throw io_exception("Unrecognized sensor name");
         }
@@ -992,6 +1032,8 @@ namespace librealsense
                         sensor_name = sensor_info->get_info(RS2_CAMERA_INFO_NAME);
 
                     update_proccesing_blocks(m_file, sensor_index, time, m_version, sensor_extensions, m_version, pid, sensor_name);
+                    update_l500_depth_sensor(m_file, sensor_index, time, m_version, sensor_extensions, m_version, pid, sensor_name);
+
                     sensor_descriptions.emplace_back(sensor_index, sensor_extensions, streams_snapshots);
                 }
 
@@ -1317,12 +1359,15 @@ namespace librealsense
     std::pair<rs2_option, std::shared_ptr<librealsense::option>> ros_reader::create_option(const rosbag::Bag& file, const rosbag::MessageInstance& value_message_instance)
     {
         auto option_value_msg = instantiate_msg<std_msgs::Float32>(value_message_instance);
-        std::string option_name = ros_topic::get_option_name(value_message_instance.getTopic());
+        auto value_topic = value_message_instance.getTopic();
+        std::string option_name = ros_topic::get_option_name(value_topic);
         device_serializer::sensor_identifier sensor_id = ros_topic::get_sensor_identifier(value_message_instance.getTopic());
         rs2_option id;
+        std::replace(option_name.begin(), option_name.end(), '_', ' ');
         convert(option_name, id);
         float value = option_value_msg->data;
-        std::string description = read_option_description(file, ros_topic::option_description_topic(sensor_id, id));
+        auto description_topic = value_topic.replace(value_topic.find_last_of("value") - sizeof("value") + 2, sizeof("value"), "description");
+        std::string description = read_option_description(file, description_topic);
         return std::make_pair(id, std::make_shared<const_value_option>(description, value));
     }
 
@@ -1332,20 +1377,6 @@ namespace librealsense
         rs2_extension id;
         convert(processing_block_msg->data, id);
         std::shared_ptr<librealsense::processing_block_interface> disparity;
-        std::shared_ptr<const_value_option> zo_point_x;
-        std::shared_ptr<const_value_option> zo_point_y;
-
-        float zo_opt_x_val = 0;
-        float zo_opt_y_val = 0;
-
-        if (options->supports_option(RS2_OPTION_ZERO_ORDER_POINT_X))
-        {
-            zo_opt_x_val = options->get_option(RS2_OPTION_ZERO_ORDER_POINT_X).query();
-        }
-        if (options->supports_option(RS2_OPTION_ZERO_ORDER_POINT_Y))
-        {
-            zo_opt_y_val = options->get_option(RS2_OPTION_ZERO_ORDER_POINT_Y).query();
-        }
 
         switch (id)
         {
@@ -1364,15 +1395,21 @@ namespace librealsense
         case RS2_EXTENSION_HOLE_FILLING_FILTER:
             return std::make_shared<ExtensionToType<RS2_EXTENSION_HOLE_FILLING_FILTER>::type>();
         case RS2_EXTENSION_ZERO_ORDER_FILTER:
-            if (!options->supports_option(RS2_OPTION_ZERO_ORDER_POINT_X) || !options->supports_option(RS2_OPTION_ZERO_ORDER_POINT_Y))
-                throw io_exception("Failed to read zo point");
-
-            zo_point_x = std::make_shared<const_value_option>("", zo_opt_x_val);
-            zo_point_y = std::make_shared<const_value_option>("", zo_opt_y_val);
-            return std::make_shared<ExtensionToType<RS2_EXTENSION_ZERO_ORDER_FILTER>::type>(zo_point_x, zo_point_y);
+            return std::make_shared<ExtensionToType<RS2_EXTENSION_ZERO_ORDER_FILTER>::type>();
         default:
             return nullptr;
         }
+    }
+
+    ros_reader::l500_depth_data ros_reader::create_l500_intrinsic_depth(const rosbag::MessageInstance & value_message_instance)
+    {
+        ros_reader::l500_depth_data res;
+
+        auto intrinsic_msg = instantiate_msg<std_msgs::Float32MultiArray>(value_message_instance);
+
+        res = *(ros_reader::l500_depth_data*)intrinsic_msg->data.data();
+
+        return res;
     }
 
     notification ros_reader::create_notification(const rosbag::Bag& file, const rosbag::MessageInstance& message_instance)
@@ -1407,8 +1444,14 @@ namespace librealsense
             for (int i = 0; i < static_cast<int>(RS2_OPTION_COUNT); i++)
             {
                 rs2_option id = static_cast<rs2_option>(i);
-                std::string option_topic = ros_topic::option_value_topic(sensor_id, id);
-                rosbag::View option_view(file, rosbag::TopicQuery(option_topic), to_rostime(get_static_file_info_timestamp()), to_rostime(timestamp));
+                auto value_topic = ros_topic::option_value_topic(sensor_id, id);
+                std::string option_name = ros_topic::get_option_name(value_topic);
+                auto rs2_option_name = rs2_option_to_string(id); //option name with space seperator
+                auto alternate_value_topic = value_topic;
+                alternate_value_topic.replace(value_topic.find(option_name), option_name.length(), rs2_option_name);
+
+                std::vector<std::string> option_topics{ value_topic, alternate_value_topic };
+                rosbag::View option_view(file, rosbag::TopicQuery(option_topics), to_rostime(get_static_file_info_timestamp()), to_rostime(timestamp));
                 auto it = option_view.begin();
                 if (it == option_view.end())
                 {

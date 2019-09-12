@@ -1,6 +1,10 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2017 Intel Corporation. All Rights Reserved.
 
+#ifndef NOMINMAX
+    #define NOMINMAX
+#endif
+
 #include <memory>
 #include <thread>
 #include "tm-device.h"
@@ -248,7 +252,6 @@ namespace librealsense
                 {
                     return (rs2_metadata_type)(vf->additional_data.system_time);
                 }
-                
                 if (auto* mf = dynamic_cast<const motion_frame*>(&frm))
                 {
                     return (rs2_metadata_type)(mf->additional_data.system_time);
@@ -256,6 +259,21 @@ namespace librealsense
                 if (auto* pf = dynamic_cast<const pose_frame*>(&frm))
                 {
                     return (rs2_metadata_type)(pf->additional_data.system_time);
+                }
+            }
+            if(_type == RS2_FRAME_METADATA_FRAME_TIMESTAMP)
+            {
+                if (auto* vf = dynamic_cast<const video_frame*>(&frm))
+                {
+                    return (rs2_metadata_type)(vf->additional_data.timestamp*1e+3);
+                }
+                if (auto* mf = dynamic_cast<const motion_frame*>(&frm))
+                {
+                    return (rs2_metadata_type)(mf->additional_data.timestamp*1e+3);
+                }
+                if (auto* pf = dynamic_cast<const pose_frame*>(&frm))
+                {
+                    return (rs2_metadata_type)(pf->additional_data.timestamp*1e+3);
                 }
             }
             if (_type == RS2_FRAME_METADATA_TEMPERATURE)
@@ -283,6 +301,10 @@ namespace librealsense
             {
                 return dynamic_cast<const video_frame*>(&frm) != nullptr || dynamic_cast<const motion_frame*>(&frm) != nullptr;
             }
+            if (_type == RS2_FRAME_METADATA_FRAME_TIMESTAMP)
+            {
+                return (dynamic_cast<const video_frame*>(&frm) != nullptr) || (dynamic_cast<const motion_frame*>(&frm) != nullptr) || (dynamic_cast<const pose_frame*>(&frm) != nullptr);
+            }
             return false;
         }
     private:
@@ -297,10 +319,12 @@ namespace librealsense
     tm2_sensor::tm2_sensor(tm2_device* owner, perc::TrackingDevice* dev)
         : sensor_base("Tracking Module", owner, this), _dispatcher(10), _tm_dev(dev)
     {
+        _source.set_max_publish_list_size(64); //increase frame source queue size for TM2
         register_metadata(RS2_FRAME_METADATA_ACTUAL_EXPOSURE, std::make_shared<md_tm2_parser>(RS2_FRAME_METADATA_ACTUAL_EXPOSURE));
         register_metadata(RS2_FRAME_METADATA_TEMPERATURE    , std::make_shared<md_tm2_parser>(RS2_FRAME_METADATA_TEMPERATURE));
         //Replacing md parser for RS2_FRAME_METADATA_TIME_OF_ARRIVAL
         _metadata_parsers->operator[](RS2_FRAME_METADATA_TIME_OF_ARRIVAL) = std::make_shared<md_tm2_parser>(RS2_FRAME_METADATA_TIME_OF_ARRIVAL);
+        _metadata_parsers->operator[](RS2_FRAME_METADATA_FRAME_TIMESTAMP) = std::make_shared<md_tm2_parser>(RS2_FRAME_METADATA_FRAME_TIMESTAMP);
     }
 
     tm2_sensor::~tm2_sensor()
@@ -798,7 +822,7 @@ namespace librealsense
         result.fx = tm_intrinsics.fx;
         result.fy = tm_intrinsics.fy;
         result.model = convertTm2CameraModel(tm_intrinsics.distortionModel);
-        librealsense::copy_array(result.coeffs, tm_intrinsics.coeffs);
+        librealsense::copy_array<true>(result.coeffs, tm_intrinsics.coeffs);
         return result;
     }
 
@@ -828,9 +852,9 @@ namespace librealsense
         {
             throw io_exception("Failed to read TM2 intrinsics");
         }
-        librealsense::copy_2darray(result.data, tm_intrinsics.data);
-        librealsense::copy_array(result.noise_variances, tm_intrinsics.noiseVariances);
-        librealsense::copy_array(result.bias_variances, tm_intrinsics.biasVariances);
+        librealsense::copy_2darray<true>(result.data, tm_intrinsics.data);
+        librealsense::copy_array<true>(result.noise_variances, tm_intrinsics.noiseVariances);
+        librealsense::copy_array<true>(result.bias_variances, tm_intrinsics.biasVariances);
 
         return result;
     }
@@ -871,11 +895,170 @@ namespace librealsense
             throw io_exception("Failed to read TM2 intrinsics");
         }
 
-        librealsense::copy_array(result.rotation, tm_extrinsics.rotation);
-        librealsense::copy_array(result.translation, tm_extrinsics.translation);
+        librealsense::copy_array<true>(result.rotation, tm_extrinsics.rotation);
+        librealsense::copy_array<true>(result.translation, tm_extrinsics.translation);
         reference_sensor_id = tm_extrinsics.referenceSensorId;
 
         return result;
+    }
+
+    void tm2_sensor::set_intrinsics(const stream_profile_interface& stream_profile, const rs2_intrinsics& intr)
+    {
+        auto convertCameraModelTm2 = [](const rs2_distortion& model) {
+            switch (model) {
+            case RS2_DISTORTION_FTHETA: return 1;
+            case RS2_DISTORTION_NONE:   return 3;
+            case RS2_DISTORTION_KANNALA_BRANDT4: return 4;
+            default:
+                throw invalid_value_exception("Invalid TM2 camera model");
+            }
+        };
+
+        perc::TrackingData::CameraIntrinsics tm2_intrinsics;
+        tm2_intrinsics.width = intr.width;
+        tm2_intrinsics.height = intr.height;
+        tm2_intrinsics.fx = intr.fx;
+        tm2_intrinsics.fy = intr.fy;
+        tm2_intrinsics.ppx = intr.ppx;
+        tm2_intrinsics.ppy = intr.ppy;
+        tm2_intrinsics.distortionModel = convertCameraModelTm2(intr.model);
+        librealsense::copy_array(tm2_intrinsics.coeffs, intr.coeffs);
+
+        auto status = _tm_dev->SetCameraIntrinsics(SET_SENSOR_ID(SensorType::Fisheye, stream_profile.get_stream_index() - 1), tm2_intrinsics);
+        if (status != perc::Status::SUCCESS) {
+            throw io_exception(to_string() << "Error T2xx set intrinsics, status = " << (uint32_t)status);
+        }
+    }
+
+    void tm2_sensor::set_extrinsics(const stream_profile_interface& from_profile, const stream_profile_interface& to_profile, const rs2_extrinsics& extr)
+    {
+        switch (to_profile.get_stream_type()) {
+        case RS2_STREAM_POSE:
+            set_extrinsics_to_ref(from_profile.get_stream_type(), from_profile.get_stream_index(), extr);
+            break;
+        case RS2_STREAM_FISHEYE:
+        {
+            auto inv = [](const rs2_extrinsics& src) {
+                rs2_extrinsics dst; 
+                auto dst_rotation = dst.rotation;
+                for (auto i : { 0,3,6,1,4,7,2,5,8 }) { *dst_rotation++ = src.rotation[i]; }
+                dst.translation[0] = - src.rotation[0] * src.translation[0] - src.rotation[3] * src.translation[1] - src.rotation[6] * src.translation[2];
+                dst.translation[1] = - src.rotation[1] * src.translation[0] - src.rotation[4] * src.translation[1] - src.rotation[7] * src.translation[2];
+                dst.translation[2] = - src.rotation[2] * src.translation[0] - src.rotation[5] * src.translation[1] - src.rotation[8] * src.translation[2];
+                return dst;
+            };
+
+            auto mult = [](const rs2_extrinsics& a, const rs2_extrinsics& b) {
+                rs2_extrinsics tf;
+                tf.rotation[0] = a.rotation[0] * b.rotation[0] + a.rotation[1] * b.rotation[3] + a.rotation[2] * b.rotation[6];
+                tf.rotation[1] = a.rotation[0] * b.rotation[1] + a.rotation[1] * b.rotation[4] + a.rotation[2] * b.rotation[7];
+                tf.rotation[2] = a.rotation[0] * b.rotation[2] + a.rotation[1] * b.rotation[5] + a.rotation[2] * b.rotation[8];
+                tf.rotation[3] = a.rotation[3] * b.rotation[0] + a.rotation[4] * b.rotation[3] + a.rotation[5] * b.rotation[6];
+                tf.rotation[4] = a.rotation[3] * b.rotation[1] + a.rotation[4] * b.rotation[4] + a.rotation[5] * b.rotation[7];
+                tf.rotation[5] = a.rotation[3] * b.rotation[2] + a.rotation[4] * b.rotation[5] + a.rotation[5] * b.rotation[8];
+                tf.rotation[6] = a.rotation[6] * b.rotation[0] + a.rotation[7] * b.rotation[3] + a.rotation[8] * b.rotation[6];
+                tf.rotation[7] = a.rotation[6] * b.rotation[1] + a.rotation[7] * b.rotation[4] + a.rotation[8] * b.rotation[7];
+                tf.rotation[8] = a.rotation[6] * b.rotation[2] + a.rotation[7] * b.rotation[5] + a.rotation[8] * b.rotation[8];
+                tf.translation[0] = a.rotation[0] * b.translation[0] + a.rotation[1] * b.translation[1] + a.rotation[2] * b.translation[2] + a.translation[0];
+                tf.translation[1] = a.rotation[3] * b.translation[0] + a.rotation[4] * b.translation[1] + a.rotation[5] * b.translation[2] + a.translation[1];
+                tf.translation[2] = a.rotation[6] * b.translation[0] + a.rotation[7] * b.translation[1] + a.rotation[8] * b.translation[2] + a.translation[2];
+                return tf;
+            };
+
+            perc::SensorId reference_sensor_id;
+            auto& H_fe1_fe2 = extr;
+            auto H_fe2_fe1  = inv(H_fe1_fe2);
+            auto H_fe1_pose = get_extrinsics(from_profile, reference_sensor_id);
+            auto H_fe2_pose = mult(H_fe2_fe1, H_fe1_pose);  //H_fe2_pose = H_fe2_fe1 * H_fe1_pose
+            set_extrinsics_to_ref(RS2_STREAM_FISHEYE, 2, H_fe2_pose);
+            break;
+        }
+        default:
+            throw invalid_value_exception("Invalid stream type: set_extrinsics only support fisheye stream");
+        }
+    }
+
+    void tm2_sensor::set_extrinsics_to_ref(rs2_stream stream_type, int stream_index, const rs2_extrinsics& extr)
+    {
+        SensorType type = SensorType::Max;
+        switch (stream_type)
+        {
+        case RS2_STREAM_FISHEYE:
+            type = SensorType::Fisheye;
+            break;
+        case RS2_STREAM_ACCEL:
+            type = SensorType::Accelerometer;
+            break;
+        case RS2_STREAM_GYRO:
+            type = SensorType::Gyro;
+            break;
+        case RS2_STREAM_POSE:
+            type = SensorType::Pose;
+            break;
+        default:
+            throw invalid_value_exception("Invalid stream type");
+        }
+
+        if (type == SensorType::Fisheye)
+        {
+            stream_index--;
+        }
+
+        perc::TrackingData::SensorExtrinsics tm2_extrinsics;
+        tm2_extrinsics.referenceSensorId = -1; //TODO: figure out default common reference sensor id defined internally.
+        librealsense::copy_array(tm2_extrinsics.rotation, extr.rotation);
+        librealsense::copy_array(tm2_extrinsics.translation, extr.translation);
+
+        auto status = _tm_dev->SetExtrinsics(SET_SENSOR_ID(type, stream_index), tm2_extrinsics);
+        if (status != perc::Status::SUCCESS) {
+            throw io_exception(to_string() << "Error in T2xx set extrinsics, status = " << (uint32_t)status);
+        }
+    }
+
+    void tm2_sensor::set_motion_device_intrinsics(const stream_profile_interface& stream_profile, const rs2_motion_device_intrinsic& intr)
+    {
+        if (stream_profile.get_stream_index() != 0) {
+            throw invalid_value_exception("Invalid stream index");
+        }
+        SensorType type = SensorType::Max;
+        switch (stream_profile.get_stream_type()) {
+        case RS2_STREAM_GYRO: type = SensorType::Gyro; break;
+        case RS2_STREAM_ACCEL: type = SensorType::Accelerometer; break;
+        default:
+            throw invalid_value_exception("Invalid stream type");
+        }
+
+        perc::TrackingData::MotionIntrinsics tm2_motion_intrinsics;
+        librealsense::copy_2darray(tm2_motion_intrinsics.data, intr.data);
+        librealsense::copy_array(tm2_motion_intrinsics.biasVariances, intr.bias_variances);
+        librealsense::copy_array(tm2_motion_intrinsics.noiseVariances, intr.noise_variances);
+
+        auto status = _tm_dev->SetMotionModuleIntrinsics(SET_SENSOR_ID(type, 0), tm2_motion_intrinsics);
+        if (status != perc::Status::SUCCESS) {
+            throw io_exception(to_string() << "Error in T2xx set motion device intrinsics, status = " << (uint32_t)status);
+        }
+    }
+
+    void tm2_sensor::write_calibration()
+    {
+        auto status = _tm_dev->WriteConfiguration(ID_OEM_CAL, 0, nullptr);
+        if (status != perc::Status::SUCCESS) {
+            throw io_exception(to_string() << "Error T2xx set motion device intrinsics, status = " << (uint32_t)status);
+        }
+    }
+
+    void tm2_sensor::reset_to_factory_calibration()
+    {
+        auto status = _tm_dev->DeleteConfiguration(ID_OEM_CAL);
+        switch(status){
+            case perc::Status::SUCCESS:
+                break;
+            case perc::Status::TABLE_NOT_EXIST:
+                LOG_WARNING("Warning, T2xx has already been using factory calibration, status = TABLE_NOT_EXIST");
+                break;
+            default:
+                throw io_exception(to_string() << "Error in T2xx reset to factory calibration, status = " << (uint32_t)status);
+        }
     }
 
 
@@ -1533,4 +1716,20 @@ namespace librealsense
     {
         _sensor->detach_controller(id);
     }
+
+    void tm2_device::register_stream_to_extrinsic_group(const stream_interface& stream, uint32_t group_index)
+    {
+        //TM2 uses POSE sensor as reference sensor for extrinsics
+        auto tm2_profiles = _sensor->get_stream_profiles();
+        int ref_index = 0;
+        for (int i = 0; i < tm2_profiles.size(); i++)
+            if (tm2_profiles[i]->get_stream_type() == RS2_STREAM_POSE)
+            {
+                ref_index = i;
+                break;
+            }
+
+        _extrinsics[stream.get_unique_id()] = std::make_pair(group_index, tm2_profiles[ref_index]);
+    }
+
 }

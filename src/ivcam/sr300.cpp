@@ -9,6 +9,9 @@
 #include "proc/spatial-filter.h"
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
+#include "ds5/ds5-device.h"
+#include "../../include/librealsense2/h/rs_sensor.h"
+#include "../common/fw/firmware-version.h"
 
 namespace librealsense
 {
@@ -215,6 +218,11 @@ namespace librealsense
         return flash;
     }
 
+    void sr300_camera::update_flash(const std::vector<uint8_t>& image, update_progress_callback_ptr callback, int update_mode)
+    {
+        throw std::runtime_error("update_flash is not supported by SR300");
+    }
+
     struct sr300_raw_calibration
     {
         uint16_t tableVersion;
@@ -273,6 +281,7 @@ namespace librealsense
         enable_timestamp(true, true);
 
         auto pid_hex_str = hexify(color.pid);
+        auto recommended_fw_version = firmware_version(SR3XX_RECOMMENDED_FIRMWARE_VERSION);
 
         register_info(RS2_CAMERA_INFO_NAME,             device_name);
         register_info(RS2_CAMERA_INFO_SERIAL_NUMBER,    serial);
@@ -282,6 +291,8 @@ namespace librealsense
         register_info(RS2_CAMERA_INFO_DEBUG_OP_CODE,    std::to_string(static_cast<int>(fw_cmd::GLD)));
         register_info(RS2_CAMERA_INFO_PRODUCT_ID,       pid_hex_str);
         register_info(RS2_CAMERA_INFO_PRODUCT_LINE,     "SR300");
+        register_info(RS2_CAMERA_INFO_CAMERA_LOCKED,    _is_locked ? "YES" : "NO");
+        register_info(RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION, recommended_fw_version);
 
         register_autorange_options();
 
@@ -310,6 +321,13 @@ namespace librealsense
                                                 return (c.Rmax / 1000 / 0xFFFF);
                                             })));
 
+        if (firmware_version(fw_version) >= firmware_version("3.26.2.0"))
+        {
+            roi_sensor_interface* roi_sensor;
+            if ((roi_sensor = dynamic_cast<roi_sensor_interface*>(&get_sensor(_color_device_idx))))
+                roi_sensor->set_roi_method(std::make_shared<ds5_auto_exposure_roi_method>(*_hw_monitor,
+                (ds::fw_cmd)ivcam::fw_cmd::SetRgbAeRoi));
+        }
     }
     void sr300_camera::create_snapshot(std::shared_ptr<debug_interface>& snapshot) const
     {

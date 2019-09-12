@@ -24,6 +24,7 @@
 #include <initguid.h>
 #include <propkeydef.h>
 #include <comutil.h>
+#include <string>
 
 #pragma comment(lib, "Sensorsapi.lib")
 #pragma comment(lib, "PortableDeviceGuids.lib")
@@ -349,15 +350,8 @@ namespace librealsense
         {
             std::vector<hid_sensor> sensors;
 
-            HRESULT res = S_OK;
-            BSTR fName{};
-
-            for (auto& sensor : _opened_sensors)
-            {
-                sensors.push_back({ sensor->get_sensor_name() });
-            }
-
-            SysFreeString(fName);
+            for (auto& sensor : _hid_profiles)
+                sensors.push_back({ sensor.sensor_name });
 
             return sensors;
         }
@@ -443,7 +437,9 @@ namespace librealsense
                                             }
                                             if (IsEqualPropertyKey(propertyKey, SENSOR_PROPERTY_SERIAL_NUMBER))
                                             {
-                                                info.serial_number = std::string(propertyValue.pwszVal, propertyValue.pwszVal + wcslen(propertyValue.pwszVal));
+                                                auto str = std::string(propertyValue.pwszVal, propertyValue.pwszVal + wcslen(propertyValue.pwszVal));
+                                                std::transform(begin(str), end(str), begin(str), ::tolower);
+                                                info.serial_number = str;
                                             }
                                         }
 
