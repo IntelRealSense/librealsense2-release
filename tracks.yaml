@@ -13,8 +13,8 @@ tracks:
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc}
     devel_branch: null
-    last_release: v2.25.2
-    last_version: 2.25.2
+    last_release: v2.28.0
+    last_version: 2.28.0
     name: upstream
     patches: null
     release_inc: '1'
