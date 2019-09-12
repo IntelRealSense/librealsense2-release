@@ -533,7 +533,7 @@ namespace librealsense
                     // Unpack the frame
                     if (requires_processing && (dest.size() > 0))
                     {
-                        unpacker.unpack(dest.data(), reinterpret_cast<const byte *>(f.pixels), mode.profile.width, mode.profile.height);
+                        unpacker.unpack(dest.data(), reinterpret_cast<const byte *>(f.pixels), mode.profile.width, mode.profile.height, f.frame_size);
                     }
 
                     // If any frame callbacks were specified, dispatch them now
@@ -790,6 +790,7 @@ namespace librealsense
     {
         register_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP, make_additional_data_parser(&frame_additional_data::backend_timestamp));
 
+
         std::map<std::string, uint32_t> frequency_per_sensor;
         for (auto& elem : sensor_name_and_hid_profiles)
             frequency_per_sensor.insert(make_pair(elem.first, elem.second.fps));
@@ -798,11 +799,9 @@ namespace librealsense
         for (auto& elem : frequency_per_sensor)
             profiles_vector.push_back(platform::hid_profile{elem.first, elem.second});
 
-        _hid_device->open(profiles_vector);
+        _hid_device->register_profiles(profiles_vector);
         for (auto& elem : _hid_device->get_sensors())
             _hid_sensors.push_back(elem);
-
-        _hid_device->close();
     }
 
     hid_sensor::~hid_sensor()
@@ -1017,7 +1016,7 @@ namespace librealsense
             frame->set_stream(request);
 
             std::vector<byte*> dest{const_cast<byte*>(frame->get_frame_data())};
-            mode.unpacker->unpack(dest.data(),(const byte*)sensor_data.fo.pixels, mode.profile.width, mode.profile.height);
+            mode.unpacker->unpack(dest.data(),(const byte*)sensor_data.fo.pixels, mode.profile.width, mode.profile.height, data_size);
 
             if (_on_before_frame_callback)
             {

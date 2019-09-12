@@ -518,6 +518,22 @@ namespace rs2
 
     void viewer_model::update_configuration()
     {
+        rs2_error* e = nullptr;
+        auto version = rs2_get_api_version(&e);
+        if (e) rs2::error::handle(e);
+
+        int saved_version = config_file::instance().get_or_default(
+            configurations::viewer::sdk_version, 0);
+
+        // Great the user once upon upgrading to a new version
+        if (version > saved_version)
+        {
+            auto n = std::make_shared<version_upgrade_model>(version);
+            not_model.add_notification(n);
+
+            config_file::instance().set(configurations::viewer::sdk_version, version);
+        }
+
         continue_with_ui_not_aligned = config_file::instance().get_or_default(
             configurations::viewer::continue_with_ui_not_aligned, false);
 
@@ -639,12 +655,8 @@ namespace rs2
         ImGui::PopFont();
     }
 
-    void rs2::viewer_model::popup(const ux_window& window, const std::string& header, const std::string& message, std::function<void()> configure)
+    void rs2::viewer_model::show_popup(const ux_window& window, const popup& p)
     {
-        if (popup_triggered)
-            return;
-
-        popup_triggered = true;
         auto flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysVerticalScrollbar;
@@ -660,9 +672,9 @@ namespace rs2
 
         ImGui::SetNextWindowSize({520, 180});
 
-        ImGui::OpenPopup(header.c_str());
+        ImGui::OpenPopup(p.header.c_str());
 
-        if (ImGui::BeginPopupModal(header.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        if (ImGui::BeginPopupModal(p.header.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::PushStyleColor(ImGuiCol_Button, transparent);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, transparent);
@@ -670,7 +682,7 @@ namespace rs2
             ImGui::PushStyleColor(ImGuiCol_Text, light_grey);
             ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, white);
 
-            configure();
+            p.custom_command();
 
             ImGui::EndPopup();
         }
@@ -692,23 +704,28 @@ namespace rs2
             return std::regex_replace(s, e, "address");
         };
 
-        if (errors_not_to_show.count(simplify_error_message(message)))
+        auto it = std::find_if(_active_popups.begin(), _active_popups.end(), [&](const popup& p) { return message == p.message; });
+        if (it != _active_popups.end())
+            return;
+
+        auto simplified_error_message = simplify_error_message(message);
+        if (errors_not_to_show.count(simplified_error_message))
         {
             not_model.add_notification({ message,
                 RS2_LOG_SEVERITY_ERROR,
                 RS2_NOTIFICATION_CATEGORY_UNKNOWN_ERROR });
-            message = "";
             return;
         }
 
         std::string header = std::string(textual_icons::exclamation_triangle) + " Oops, something went wrong!";
 
-        auto config = [&]()
+        auto custom_command = [&]()
         {
+            auto msg = _active_popups.front().message;
             ImGui::Text("RealSense error calling:");
             ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, regular_blue);
-            ImGui::InputTextMultiline("##error", const_cast<char*>(message.c_str()),
-               message.size() + 1, { 500,95 }, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
+            ImGui::InputTextMultiline("##error", const_cast<char*>(msg.c_str()),
+                msg.size() + 1, { 500,95 }, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
             ImGui::PopStyleColor();
 
             //ImGui::SetCursorPos({ 10, 130 });
@@ -718,10 +735,10 @@ namespace rs2
             {
                 if (dont_show_this_error)
                 {
-                    errors_not_to_show.insert(simplify_error_message(message));
+                    errors_not_to_show.insert(simplify_error_message(msg));
                 }
-                message = "";
                 ImGui::CloseCurrentPopup();
+                _active_popups.erase(_active_popups.begin());
                 dont_show_this_error = false;
             }
 
@@ -729,7 +746,8 @@ namespace rs2
             ImGui::Checkbox("Don't show this error again", &dont_show_this_error);
         };
 
-        popup(window, header, message, config);
+        popup p = {header, message, custom_command };
+        _active_popups.push_back(p);
     }
 
     std::vector<uint8_t> read_fw_file(std::string file_path)
@@ -749,70 +767,13 @@ namespace rs2
         return rv;
     }
 
-    void rs2::viewer_model::popup_fw_file_select(const ux_window& window, const fw_update_device_info& ud, std::vector<uint8_t>& fw, bool& cancel)
-    {
-        ImFont* font_14 = window.get_font();
-        cancel = false;
-
-        std::stringstream header;
-        header << "Update device " << ud.serial_number << " firmware";
-        std::stringstream message;
-        if (ud.curr_fw_version != "")
-            message << "The current firmware on the device is: " << ud.curr_fw_version << std::endl;
-        if (ud.minimal_fw_version != "")
-            message << "The minimal firmware for this device is: " << ud.minimal_fw_version << std::endl;
-        if (ud.recommended_fw_version != "")
-            message << "The recommended firmware is: " << ud.recommended_fw_version;
-
-        auto config = [&]()
-        {
-            if (ud.recommended_fw_version != "")
-            {
-                ImGui::SetCursorPos({ 10, 100 });
-                ImGui::PopStyleColor(5);
-                if (ImGui::Button(" Update Recommended ", ImVec2(0, 0)))
-                {
-                    fw = ud.fw_image;
-                    if (ud.curr_fw_version != "" && ud.dev.is<updatable>())
-                        ud.dev.as<updatable>().enter_update_state();
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::SameLine();
-            }
-            else
-            {
-                ImGui::SetCursorPos({ 10, 100 });
-                ImGui::PopStyleColor(5);
-            }
-
-            if (ImGui::Button(" Pick Firmware ", ImVec2(0, 0)))
-            {
-                auto ret = file_dialog_open(open_file, "Firmware\0*.bin\0", NULL, NULL);
-                if (!ret)
-                    return;
-                fw = read_fw_file(ret);
-                if(ud.curr_fw_version != "" && ud.dev.is<updatable>())
-                    ud.dev.as<updatable>().enter_update_state();
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(" Cancel ", ImVec2(0, 0)))
-            {
-                cancel = true;
-                ImGui::CloseCurrentPopup();
-            }
-        };
-
-        popup(window, header.str(), message.str(), config);
-    }
-
     void rs2::viewer_model::popup_firmware_update_progress(const ux_window& window, const float progress)
     {
         std::string header = "Firmware update in progress";
         std::stringstream message;
         message << std::endl << "Progress: " << (int)(progress *  100.0) << " [%]";
 
-        auto config = [&]()
+        auto custom_command = [&]()
         {
             ImGui::SetCursorPos({ 10, 100 });
             ImGui::PopStyleColor(5);
@@ -821,55 +782,8 @@ namespace rs2
             ImGui::ProgressBar(progress, { 300 , 25 }, "Firmware update");
         };
 
-        popup(window, header, message.str(), config);
-    }
-
-    void rs2::viewer_model::popup_if_fw_update_required(const ux_window& window, const fw_update_device_info& ud, bool& update)
-    {
-        update = false;
-        if (continue_with_current_fw)
-            return;
-
-        std::string header = "It's time to update";
-        std::stringstream message;
-        message << "New Firmware is available for device: " << ud.serial_number << std::endl <<
-            "The current firmware on the device is: " << ud.curr_fw_version << std::endl;
-        if (ud.minimal_fw_version != "")
-            message << "The minimal firmware for this device is: " << ud.minimal_fw_version << std::endl;
-        message << "The recommended firmware is: " << ud.recommended_fw_version;
-
-        auto config = [&]()
-        {
-            ImGui::SetCursorPos({ 10, 100 });
-            ImGui::PopStyleColor(5);
-
-            static bool dont_show_again = false;
-
-            if (ImGui::Button(" Update Recommended ", ImVec2(0, 0)))
-            {
-                update = true;
-                if (ud.dev.is<updatable>())
-                    ud.dev.as<updatable>().enter_update_state();
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(" Ignore & Continue ", ImVec2(0, 0)))
-            {
-                continue_with_current_fw = true;
-                if (dont_show_again)
-                {
-                    config_file::instance().set(
-                        configurations::viewer::continue_with_current_fw,
-                        continue_with_current_fw);
-                }
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            ImGui::Checkbox("Don't show this again", &dont_show_again);
-        };
-
-        popup(window, header, message.str(), config);
+        popup p = { header, message.str(), custom_command };
+        _active_popups.push_back(p);
     }
 
     void viewer_model::show_icon(ImFont* font_18, const char* label_str, const char* text, int x, int y, int id,
@@ -1103,10 +1017,14 @@ namespace rs2
 
         popup_if_error(window, error_message);
 
+        if (!_active_popups.empty())
+            show_popup(window, _active_popups.front());
+
         ImGui::End();
         ImGui::PopStyleVar(2);
 
-        popup_triggered = false;
+        error_message = "";
+
         return f;
     }
 
@@ -1460,13 +1378,6 @@ namespace rs2
                 }
             }
         }
-
-        // Metadata overlay windows shall be drawn after textures to preserve z-buffer functionality
-        for (auto &&kvp : layout)
-        {
-            if (streams[kvp.first].metadata_displayed)
-                streams[kvp.first].show_metadata(mouse);
-        }
     }
 
     void viewer_model::render_3d_view(const rect& viewer_rect,
@@ -1509,7 +1420,7 @@ namespace rs2
         auto r1 = matrix4::identity();
         auto r2 = matrix4::identity();
 
-        if (draw_plane)
+        if (draw_plane && !paused)
         {
             glPushAttrib(GL_LINE_BIT);
             glLineWidth(2);
@@ -1773,7 +1684,11 @@ namespace rs2
         ImGui::PushFont(window.get_large_font());
         ImGui::PushStyleColor(ImGuiCol_Border, black);
 
-        int buttons = window.is_fullscreen() ? 4 : 3;
+        int buttons = window.is_fullscreen() ? 5 : 4;
+
+        ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 2));
+        not_model.draw_snoozed_button();
+        ImGui::SameLine();
 
         ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons));
         ImGui::PushStyleColor(ImGuiCol_Text, is_3d_view ? light_grey : light_blue);
@@ -1801,7 +1716,7 @@ namespace rs2
         ImGui::PopStyleColor(2);
         ImGui::SameLine();
 
-        ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 2));
+        ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 3));
 
         static bool settings_open = false;
         ImGui::PushStyleColor(ImGuiCol_Text, !settings_open ? light_grey : light_blue);
@@ -1820,7 +1735,7 @@ namespace rs2
         if (window.is_fullscreen())
         {
             ImGui::SameLine();
-            ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 3));
+            ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 4));
 
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, button_color);
             ImGui::PushStyleColor(ImGuiCol_Text, light_grey);
@@ -1866,7 +1781,7 @@ namespace rs2
 
             if (ImGui::Selectable("Intel Store"))
             {
-                open_url(store_url);
+                open_url("https://store.intelrealsense.com/");
             }
 
             if (ImGui::Selectable(settings))
@@ -1891,6 +1806,7 @@ namespace rs2
         static config_file temp_cfg;
         static bool reload_required = false;
         static bool refresh_required = false;
+        static bool refresh_updates = false;
 
         static int tab = 0;
 
@@ -1923,7 +1839,7 @@ namespace rs2
 
             if (ImGui::BeginPopupModal(settings, nullptr, flags))
             {
-                ImGui::SetCursorScreenPos({ (float)(x0 + w / 2 - 220), (float)(y0 + 27) });
+                ImGui::SetCursorScreenPos({ (float)(x0 + w / 2 - 280), (float)(y0 + 27) });
                 ImGui::PushStyleColor(ImGuiCol_Button, sensor_bg);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, sensor_bg);
                 ImGui::PushFont(window.get_large_font());
@@ -1959,7 +1875,17 @@ namespace rs2
                     temp_cfg.set(configurations::viewer::settings_tab, tab);
                 }
                 ImGui::PopStyleColor(2);
-                //ImGui::SameLine();
+
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Text, tab != 3 ? light_grey : light_blue);
+                ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, tab != 3 ? light_grey : light_blue);
+                if (ImGui::Button("Updates", { 120, 30 }))
+                {
+                    tab = 3;
+                    config_file::instance().set(configurations::viewer::settings_tab, tab);
+                    temp_cfg.set(configurations::viewer::settings_tab, tab);
+                }
+                ImGui::PopStyleColor(2);
 
                 ImGui::PopFont();
                 ImGui::PopStyleColor(2); // button color
@@ -2211,6 +2137,43 @@ namespace rs2
                     }
                 }
 
+                if (tab == 3)
+                {
+                    bool recommend_calibration = temp_cfg.get(configurations::update::recommend_calibration);
+                    if (ImGui::Checkbox("Recommend Camera Calibration", &recommend_calibration))
+                    {
+                        temp_cfg.set(configurations::update::recommend_calibration, recommend_calibration);
+                        refresh_updates = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", "When checked, the Viewer / DQT will post weekly remainders for on-chip calibration");
+                    }
+
+                    bool recommend_fw_updates = temp_cfg.get(configurations::update::recommend_updates);
+                    if (ImGui::Checkbox("Recommend Firmware Updates", &recommend_fw_updates))
+                    {
+                        temp_cfg.set(configurations::update::recommend_updates, recommend_fw_updates);
+                        refresh_updates = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", "When firmware of the device is below the version bundled with this software release\nsuggest firmware update");
+                    }
+
+                    bool allow_rc_firmware = temp_cfg.get(configurations::update::allow_rc_firmware);
+                    if (ImGui::Checkbox("Access Pre-Release Firmware Updates", &allow_rc_firmware))
+                    {
+                        temp_cfg.set(configurations::update::allow_rc_firmware, allow_rc_firmware);
+                        refresh_updates = true;
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", "Firmware Releases recommended for production-use are published at dev.intelrealsense.com/docs/firmware-releases\n"
+                        "After firmware version passes basic regression tests and until it is published on the site, it is available as a Pre-Release\n");
+                    }
+                }
+
                 ImGui::Separator();
 
                 ImGui::GetWindowDrawList()->AddRectFilled({ (float)x0, (float)(y0 + h - 60) },
@@ -2229,6 +2192,10 @@ namespace rs2
                     if (reload_required) window.reload();
                     else if (refresh_required) window.refresh();
                     update_configuration();
+
+                    if (refresh_updates)
+                        for (auto&& dev : devices)
+                            dev->refresh_notifications(*this);
                 };
         
                 ImGui::SetCursorScreenPos({ (float)(x0 + w / 2 - 190), (float)(y0 + h - 30) });
