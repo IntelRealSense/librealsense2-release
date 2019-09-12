@@ -8,6 +8,8 @@ project(internal-tests)
 set (INTERNAL_TESTS_SOURCES
     internal-tests-main.cpp
     internal-tests-usb.cpp
+    internal-tests-extrinsic.cpp
+	internal-tests-types.cpp
 )
 
 add_executable(${PROJECT_NAME} ${INTERNAL_TESTS_SOURCES})

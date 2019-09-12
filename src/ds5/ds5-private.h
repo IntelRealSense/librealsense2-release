@@ -5,6 +5,7 @@
 
 #include "backend.h"
 #include "types.h"
+#include "fw-update/fw-update-unsigned.h"
 
 #include <map>
 #include <iomanip>
@@ -90,6 +91,15 @@ namespace librealsense
             ds::RS465_PID
         };
 
+        static const std::set<std::uint16_t> hid_bmi_055_pid = {
+            ds::RS435I_PID,
+            ds::RS430I_PID
+        };
+
+        static const std::set<std::uint16_t> hid_bmi_085_pid = {
+            RS465_PID
+        };
+
         static const std::set<std::uint16_t> fisheye_pid = {
             ds::RS400_MM_PID,
             ds::RS410_MM_PID,
@@ -135,10 +145,20 @@ namespace librealsense
 
         const int REGISTER_CLOCK_0 = 0x0001613c;
 
+        const uint32_t FLASH_SIZE = 0x00200000;
+        const uint32_t FLASH_SECTOR_SIZE = 0x1000;
+
+        flash_info get_flash_info(const std::vector<uint8_t>& flash_buffer);
+
         enum fw_cmd : uint8_t
         {
             MRD             = 0x01,     // Read Register
             FRB             = 0x09,     // Read from flash
+            FWB             = 0x0a,     // Write to flash <Parameter1 Name="StartIndex"> <Parameter2 Name="Size">
+            FES             = 0x0b,     // Erase flash sector <Parameter1 Name="Sector Index"> <Parameter2 Name="Number of Sectors">
+            FEF             = 0x0c,     // Erase flash full <Parameter1 Name="0xACE">
+            FSRU            = 0x0d,     // Flash status register unlock
+            FPLOCK          = 0x0e,     // Permanent lock on lower Quarter region of the flash
             GLD             = 0x0f,     // FW logs
             GVD             = 0x10,     // camera details
             GETINTCAL       = 0x15,     // Read calibration table
@@ -150,6 +170,7 @@ namespace librealsense
             GET_ADV         = 0x2C,     // get advanced mode control
             EN_ADV          = 0x2D,     // enable advanced mode
             UAMG            = 0X30,     // get advanced mode status
+            PFD             = 0x3b,     // Disable power features <Parameter1 Name="0 - Disable, 1 - Enable" />
             SETAEROI        = 0x44,     // set auto-exposure region of interest
             GETAEROI        = 0x45,     // get auto-exposure region of interest
             MMER            = 0x4F,     // MM EEPROM read ( from DS5 cache )
@@ -165,6 +186,7 @@ namespace librealsense
             SETSUBPRESET    = 0x7B,     // Download sub-preset
             GETSUBPRESET    = 0x7C,     // Upload the current sub-preset
             GETSUBPRESETNAME= 0x7D,     // Retrieve sub-preset's name
+            RECPARAMSGET    = 0x7E,     // Retrieve depth calibration table in new format (fw >= 5.11.12.100)
         };
 
         #define TOSTRING(arg) #arg
@@ -227,6 +249,8 @@ namespace librealsense
             CAP_IMU_SENSOR              = (1u << 3),
             CAP_GLOBAL_SHUTTER          = (1u << 4),
             CAP_ROLLING_SHUTTER         = (1u << 5),
+            CAP_BMI_055                 = (1u << 6),
+            CAP_BMI_085                 = (1u << 7),
             CAP_MAX
         };
 
@@ -237,7 +261,9 @@ namespace librealsense
             { d400_caps::CAP_FISHEYE_SENSOR,   "Fisheye Sensor"    },
             { d400_caps::CAP_IMU_SENSOR,       "IMU Sensor"        },
             { d400_caps::CAP_GLOBAL_SHUTTER,   "Global Shutter"    },
-            { d400_caps::CAP_ROLLING_SHUTTER,  "Rolling Shutter"   }
+            { d400_caps::CAP_ROLLING_SHUTTER,  "Rolling Shutter"   },
+            { d400_caps::CAP_BMI_055,          "IMU BMI_055"       },
+            { d400_caps::CAP_BMI_085,          "IMU BMI_085"       }
         };
 
         inline d400_caps operator &(const d400_caps lhs, const d400_caps rhs)
@@ -255,11 +281,17 @@ namespace librealsense
             return lhs = lhs | rhs;
         }
 
+        inline bool operator &&(d400_caps l, d400_caps r)
+        {
+            return !!(static_cast<uint8_t>(l) & static_cast<uint8_t>(r));
+        }
+
         inline std::ostream& operator <<(std::ostream& stream, const d400_caps& cap)
         {
             for (auto i : { d400_caps::CAP_ACTIVE_PROJECTOR,d400_caps::CAP_RGB_SENSOR,
                             d400_caps::CAP_FISHEYE_SENSOR,  d400_caps::CAP_IMU_SENSOR,
-                            d400_caps::CAP_GLOBAL_SHUTTER,  d400_caps::CAP_ROLLING_SHUTTER })
+                            d400_caps::CAP_GLOBAL_SHUTTER,  d400_caps::CAP_ROLLING_SHUTTER,
+                            d400_caps::CAP_BMI_055,         d400_caps::CAP_BMI_085 })
             {
                 if (i==(i&cap))
                     stream << d400_capabilities_names.at(i) << " ";
@@ -312,6 +344,16 @@ namespace librealsense
             uint8_t             reserved1[88];
             float4              rect_params[max_ds5_rect_resolutions];
             uint8_t             reserved2[64];
+        };
+
+        struct new_calibration_item
+        {
+            uint16_t width;
+            uint16_t height;
+            float  fx;
+            float  fy;
+            float  ppx;
+            float  ppy;
         };
 
         template<class T>
@@ -517,8 +559,8 @@ namespace librealsense
             float3              translation;                // RGB translation vector, mm
             // RGB Projection
             float               projection[12];             // Projection matrix from depth to RGB [3 X 4]
-            uint16_t            width;                      // original calibrated resolution
-            uint16_t            height;
+            uint16_t            calib_width;                // original calibrated resolution
+            uint16_t            calib_height;
             // RGB Rectification Coefficients
             float3x3            intrinsic_matrix_rect;      // RGB intrinsic matrix after rectification
             float3x3            rotation_matrix_rect;       // Rotation matrix for rectification of RGB
@@ -619,6 +661,9 @@ namespace librealsense
 
 
         ds5_rect_resolutions width_height_to_ds5_rect_resolutions(uint32_t width, uint32_t height);
+
+        bool try_get_intrinsic_by_resolution_new(const std::vector<uint8_t>& raw_data,
+                uint32_t width, uint32_t height, rs2_intrinsics* result);
 
         rs2_intrinsics get_intrinsic_by_resolution(const std::vector<uint8_t>& raw_data, calibration_table_id table_id, uint32_t width, uint32_t height);
         rs2_intrinsics get_intrinsic_by_resolution_coefficients_table(const std::vector<uint8_t>& raw_data, uint32_t width, uint32_t height);
