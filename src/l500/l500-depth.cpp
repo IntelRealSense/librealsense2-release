@@ -70,6 +70,7 @@ namespace librealsense
         get_depth_sensor().register_option(RS2_OPTION_APD_TEMPERATURE,
             std::make_shared <l500_temperature_options>(_hw_monitor.get(), RS2_OPTION_APD_TEMPERATURE));
 
+
         environment::get_instance().get_extrinsics_graph().register_same_extrinsics(*_depth_stream, *_ir_stream);
         environment::get_instance().get_extrinsics_graph().register_same_extrinsics(*_depth_stream, *_confidence_stream);
 
@@ -107,9 +108,9 @@ namespace librealsense
     {
         std::vector<tagged_profile> tags;
 
-        tags.push_back({ RS2_STREAM_DEPTH, -1, 640, 360, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
-        tags.push_back({ RS2_STREAM_INFRARED, -1, 640, 360, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
-        tags.push_back({ RS2_STREAM_CONFIDENCE, -1, 640, 360, RS2_FORMAT_RAW8, 30, profile_tag::PROFILE_TAG_SUPERSET });
+        tags.push_back({ RS2_STREAM_DEPTH, -1, 640, 480, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+        tags.push_back({ RS2_STREAM_INFRARED, -1, 640, 480, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
+        tags.push_back({ RS2_STREAM_CONFIDENCE, -1, 640, 480, RS2_FORMAT_RAW8, 30, profile_tag::PROFILE_TAG_SUPERSET });
         
         return tags;
     }
@@ -137,19 +138,6 @@ namespace librealsense
         return std::make_shared<timestamp_composite_matcher>(matchers);
     }
 
-    std::pair<int, int> l500_depth_sensor::read_zo_point()
-    {
-        const int zo_point_address = 0xa00e1b8c;
-        command cmd(ivcam2::fw_cmd::MRD, zo_point_address, zo_point_address + 4);
-        auto res = _owner->_hw_monitor->send(cmd);
-        if (res.size() < 2)
-        {
-            throw std::runtime_error("Invalid result size!");
-        }
-        auto data = (uint16_t*)res.data();
-        return { data[0], data[1] };
-    }
-
     int l500_depth_sensor::read_algo_version()
     {
         const int algo_version_address = 0xa0020bd8;
@@ -164,7 +152,7 @@ namespace librealsense
         return ver;
     }
 
-    float l500_depth_sensor::read_baseline()
+    float l500_depth_sensor::read_baseline() const
     {
         const int baseline_address = 0xa00e0868;
         command cmd(ivcam2::fw_cmd::MRD, baseline_address, baseline_address + 4);
@@ -187,6 +175,13 @@ namespace librealsense
         }
         auto znorm = *(float*)res.data();
         return 1/znorm* MM_TO_METER;
+    }
+
+    float l500_depth_sensor::get_depth_offset() const
+    {
+        using namespace ivcam2;
+        auto intrinsic = check_calib<intrinsic_depth>(*_owner->_calib_table_raw);
+        return intrinsic->orient.depth_offset;
     }
 
     rs2_time_t l500_timestamp_reader_from_metadata::get_frame_timestamp(const request_mapping& mode, const platform::frame_object& fo)
@@ -240,20 +235,10 @@ namespace librealsense
         return (has_metadata_ts(fo)) ? RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK : _backup_timestamp_reader->get_frame_timestamp_domain(mode, fo);
     }
 
-    float zo_point_option_x::query() const
-    {
-        return static_cast<float>(_zo_point->first);
-    }
-
-    float zo_point_option_y::query() const
-    {
-        return static_cast<float>(_zo_point->second);
-    }
-
-    processing_blocks l500_depth_sensor::get_l500_recommended_proccesing_blocks(std::shared_ptr<option> zo_point_x, std::shared_ptr<option> zo_point_y)
+    processing_blocks l500_depth_sensor::get_l500_recommended_proccesing_blocks()
     {
         processing_blocks res;
-        res.push_back(std::make_shared<zero_order>(zo_point_x, zo_point_y));
+        res.push_back(std::make_shared<zero_order>());
         auto depth_standart = get_depth_recommended_proccesing_blocks();
         res.insert(res.end(), depth_standart.begin(), depth_standart.end());
         res.push_back(std::make_shared<threshold>());
@@ -261,6 +246,73 @@ namespace librealsense
         res.push_back(std::make_shared<temporal_filter>());
         res.push_back(std::make_shared<hole_filling_filter>());
         return res;
+    }
+
+    void l500_depth_sensor::start(frame_callback_ptr callback)
+    {
+        if(_depth_invalidation_enabled)
+            uvc_sensor::start(std::make_shared<frame_validator>(shared_from_this(), callback, _user_requests, _validator_requests));
+        else
+            uvc_sensor::start(callback);
+    }
+
+    void l500_depth_sensor::stop()
+    {
+        uvc_sensor::stop();
+        _depth_invalidation_option->set_streaming(false);
+    }
+
+    void l500_depth_sensor::open(const stream_profiles& requests)
+    {
+        try
+        {
+            _depth_invalidation_option->set_streaming(true);
+
+            if (_depth_invalidation_enabled)
+            {
+                auto is_ir_requested = std::find_if(requests.begin(), requests.end(), [](std::shared_ptr<stream_profile_interface> sp)
+                {return sp->get_stream_type() == RS2_STREAM_INFRARED;}) != requests.end();
+
+                _validator_requests = requests;
+
+                //enable ir if user didn't asked ir in order to validate the ir frame
+                if (!is_ir_requested)
+                {
+                    auto user_request = std::find_if(requests.begin(), requests.end(), [](std::shared_ptr<stream_profile_interface> sp)
+                    {return sp->get_stream_type() != RS2_STREAM_INFRARED;});
+
+                    if (user_request == requests.end())
+                        throw std::runtime_error(to_string() << "input stream_profiles is invalid");
+
+                    auto user_request_profile = dynamic_cast<video_stream_profile*>(user_request->get());
+
+                    auto sp = uvc_sensor::get_stream_profiles();
+
+                    auto corresponding_ir = std::find_if(sp.begin(), sp.end(), [&](std::shared_ptr<stream_profile_interface> sp)
+                    {
+                        auto vs = dynamic_cast<video_stream_profile*>(sp.get());
+                        return sp->get_stream_type() == RS2_STREAM_INFRARED && frame_validator::stream_profiles_correspond(sp.get(), user_request_profile);
+                    });
+
+                    if (corresponding_ir == sp.end())
+                        throw std::runtime_error(to_string() << "can't find ir stream corresponding to user request");
+
+                    _validator_requests.push_back(*corresponding_ir);
+                }
+                _user_requests = requests;
+            }
+            else
+            {
+                _validator_requests = requests;
+            }
+
+            uvc_sensor::open(_validator_requests);
+        }
+        catch (...)
+        {
+            _depth_invalidation_option->set_streaming(false);
+            throw;
+        }
     }
 
 }

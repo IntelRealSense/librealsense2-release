@@ -261,7 +261,7 @@ namespace rs2
             for (auto i = 0; i < size; i++)
             {
                 auto f = std::shared_ptr<rs2_processing_block>(
-                    rs2_get_processing_block(list.get(), i, &e), 
+                    rs2_get_processing_block(list.get(), i, &e),
                     rs2_delete_processing_block);
                 error::handle(e);
                 results.push_back(f);
@@ -421,7 +421,7 @@ namespace rs2
         }
 
         /**
-        * Retrieve the stereoscopic baseline value from sensor
+        * Retrieve the stereoscopic baseline value from the sensor.
         */
         float get_stereo_baseline() const
         {
