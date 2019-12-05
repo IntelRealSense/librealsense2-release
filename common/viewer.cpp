@@ -827,6 +827,37 @@ namespace rs2
         ImGui::PopFont();
     }
 
+    void viewer_model::show_rendering_not_supported(ImFont* font_18, int min_x, int min_y, int max_x, int max_y, rs2_format format)
+    {
+        static periodic_timer update_string(std::chrono::milliseconds(200));
+        static int counter = 0;
+        static std::string to_print;
+        auto pos = ImGui::GetCursorScreenPos();
+        
+        ImGui::PushFont(font_18);
+        ImGui::SetCursorScreenPos({ min_x + max_x / 2.f - 210, min_y + max_y / 2.f - 20 });
+        ImGui::PushStyleColor(ImGuiCol_Text, yellowish);
+        std::string text = to_string() << textual_icons::exclamation_triangle;
+        ImGui::Text("%s", text.c_str());
+        ImGui::SetCursorScreenPos({ min_x + max_x / 2.f - 180, min_y + max_y / 2.f - 20 });
+        text = to_string() <<  " The requested format " << format << " is not supported for rendering  ";
+
+        if (update_string)
+        {
+            to_print.clear();
+            for (int i = 0; i < text.size(); i++)
+                to_print += text[(i + counter) % text.size()];
+            counter++;
+        }
+
+        ImGui::Text("%s", to_print.c_str());
+        ImGui::PopStyleColor();
+
+        ImGui::SetCursorScreenPos(pos);
+
+        ImGui::PopFont();
+    }
+
     void viewer_model::show_no_device_overlay(ImFont* font_18, int x, int y)
     {
         auto pos = ImGui::GetCursorScreenPos();
@@ -1282,6 +1313,12 @@ namespace rs2
             stream_mv.show_stream_header(font1, stream_rect, *this);
             stream_mv.show_stream_footer(font1, stream_rect, mouse, *this);
 
+            if (val_in_range(stream_mv.profile.format(), { RS2_FORMAT_RAW10 , RS2_FORMAT_RAW16, RS2_FORMAT_MJPEG }))
+            {
+                show_rendering_not_supported(font2, static_cast<int>(stream_rect.x), static_cast<int>(stream_rect.y), static_cast<int>(stream_rect.w),
+                    static_cast<int>(stream_rect.h), stream_mv.profile.format());
+            }
+
             if (stream_mv.dev->_is_being_recorded)
             {
                 show_recording_icon(font2, static_cast<int>(posX), static_cast<int>(posY), stream_mv.profile.unique_id(), alpha);
@@ -1293,8 +1330,8 @@ namespace rs2
             auto stream_type = stream_mv.profile.stream_type();
 
             if (streams[stream].is_stream_visible())
-            {
                 switch (stream_type)
+            {
                 {
                     case RS2_STREAM_GYRO: /* Fall Through */
                     case RS2_STREAM_ACCEL:
@@ -1684,11 +1721,7 @@ namespace rs2
         ImGui::PushFont(window.get_large_font());
         ImGui::PushStyleColor(ImGuiCol_Border, black);
 
-        int buttons = window.is_fullscreen() ? 5 : 4;
-
-        ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 2));
-        not_model.draw_snoozed_button();
-        ImGui::SameLine();
+        int buttons = window.is_fullscreen() ? 4 : 3;
 
         ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons));
         ImGui::PushStyleColor(ImGuiCol_Text, is_3d_view ? light_grey : light_blue);
@@ -1716,7 +1749,7 @@ namespace rs2
         ImGui::PopStyleColor(2);
         ImGui::SameLine();
 
-        ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 3));
+        ImGui::SetCursorPosX(window.width() - panel_width - panel_y * (buttons - 2));
 
         static bool settings_open = false;
         ImGui::PushStyleColor(ImGuiCol_Text, !settings_open ? light_grey : light_blue);
