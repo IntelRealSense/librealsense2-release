@@ -140,6 +140,30 @@ namespace librealsense
 #undef CASE
     }
 
+    const char* get_string(rs2_sensor_mode value)
+    {
+#define CASE(X) STRCASE(SENSOR_MODE, X)
+        switch (value)
+        {
+            CASE(XGA)
+            CASE(VGA)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+    
+    const char* get_string(rs2_ambient_light value)
+    {
+#define CASE(X) STRCASE(AMBIENT_LIGHT, X)
+        switch (value)
+        {
+            CASE(NO_AMBIENT)
+            CASE(LOW_AMBIENT)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+
     const char* get_string(rs2_extension value)
     {
 #define CASE(X) STRCASE(EXTENSION, X)
@@ -181,12 +205,17 @@ namespace librealsense
             CASE(POSE)
             CASE(POSE_SENSOR)
             CASE(WHEEL_ODOMETER)
+            CASE(GLOBAL_TIMER)
             CASE(UPDATABLE)
             CASE(UPDATE_DEVICE)
-            CASE(GLOBAL_TIMER)
             CASE(L500_DEPTH_SENSOR)
             CASE(TM2_SENSOR)
             CASE(AUTO_CALIBRATED_DEVICE)
+            CASE(COLOR_SENSOR)
+            CASE(MOTION_SENSOR)
+            CASE(FISHEYE_SENSOR)
+            CASE(DEPTH_HUFFMAN_DECODER)
+            CASE(SERIALIZABLE)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -290,11 +319,19 @@ namespace librealsense
             CASE(LED_POWER)
             CASE(ZERO_ORDER_ENABLED)
             CASE(ENABLE_MAP_PRESERVATION)
+            CASE(FREEFALL_DETECTION_ENABLED)
+            CASE(AVALANCHE_PHOTO_DIODE)
+            CASE(POST_PROCESSING_SHARPENING)
+            CASE(PRE_PROCESSING_SHARPENING)
+            CASE(NOISE_FILTERING)
+            CASE(INVALIDATION_BYPASS)
+            CASE(AMBIENT_LIGHT)
+            CASE(SENSOR_MODE)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
     }
-
+   
     const char* get_string(rs2_format value)
     {
 #define CASE(X) case RS2_FORMAT_##X: return #X;
@@ -328,6 +365,7 @@ namespace librealsense
             CASE(INZI)
             CASE(INVI)
             CASE(W10)
+            CASE(Z16H)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -408,7 +446,7 @@ namespace librealsense
             CASE(LOW_LIGHT_COMPENSATION)
             CASE(FRAME_EMITTER_MODE)
             CASE(FRAME_LED_POWER)
-
+            CASE(RAW_FRAME_SIZE)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -456,6 +494,22 @@ namespace librealsense
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 
+#undef CASE
+    }
+
+    const char* get_string(rs2_l500_visual_preset value)
+    {
+#define CASE(X) STRCASE(L500_VISUAL_PRESET, X)
+        switch (value)
+        {
+            CASE(CUSTOM)
+            CASE(DEFAULT)
+            CASE(NO_AMBIENT)
+            CASE(LOW_AMBIENT)
+            CASE(MAX_RANGE)
+            CASE(SHORT_RANGE)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
 #undef CASE
     }
     std::string firmware_version::to_string() const
@@ -634,5 +688,10 @@ namespace librealsense
     {
         auto from = reinterpret_cast<uint8_t const*>(src);
         std::copy(from, from + size, reinterpret_cast<uint8_t*>(dst));
+    }
+
+    void color_sensor::create_snapshot(std::shared_ptr<color_sensor>& snapshot) const
+    {
+        snapshot = std::make_shared<color_sensor_snapshot>();
     }
 }
