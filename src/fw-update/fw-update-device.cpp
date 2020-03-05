@@ -111,23 +111,13 @@ namespace librealsense
     update_device::update_device(const std::shared_ptr<context>& ctx, bool register_device_notifications, std::shared_ptr<platform::usb_device> usb_device)
         : _context(ctx), _usb_device(usb_device)
     {
-        if (auto messenger = _usb_device->open(FW_UPDATE_INTERFACE_NUMBER))
-        {
-            auto state = get_dfu_state(messenger);
-            LOG_DEBUG("DFU state is: " << state);
-            if (state != RS2_DFU_STATE_DFU_IDLE)
-                detach(messenger);
+        auto messenger = _usb_device->open(FW_UPDATE_INTERFACE_NUMBER);
 
-            read_device_info(messenger);
-        }
-        else
-        {
-            std::stringstream s;
-            s << "access failed for " << std::hex <<  _usb_device->get_info().vid << ":"
-              <<_usb_device->get_info().pid << " uid: " <<  _usb_device->get_info().id << std::dec;
-            LOG_ERROR(s.str().c_str());
-            throw std::runtime_error(s.str().c_str());
-        }
+        auto state = get_dfu_state(messenger);
+        if (state != RS2_DFU_STATE_DFU_IDLE)
+            detach(messenger);
+
+        read_device_info(messenger);
     }
 
     update_device::~update_device()

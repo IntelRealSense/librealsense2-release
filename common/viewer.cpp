@@ -766,9 +766,8 @@ namespace rs2
         }
     }
 
-    viewer_model::viewer_model(context &ctx_)
-            : ppf(*this),
-              ctx(ctx_),
+    viewer_model::viewer_model()
+            : ppf(*this), 
               synchronization_enable(true),
               zo_sensors(0),
               frameset_alloc(this)
@@ -1689,17 +1688,17 @@ namespace rs2
             glPopAttrib();
         }
 
-        static const double x = -M_PI_2;
-        static float _rx[4][4] = {
-            { 1, 0, 0, 0 },
-            { 0, float(cos(x)), float(-sin(x)), 0 },
-            { 0, float(sin(x)), float(cos(x)), 0 },
+        auto x = static_cast<float>(-M_PI / 2);
+        float _rx[4][4] = {
+            { 1 , 0, 0, 0 },
+            { 0, cos(x), -sin(x), 0 },
+            { 0, sin(x), cos(x), 0 },
             { 0, 0, 0, 1 }
         };
-        static const double z = M_PI;
-        static float _rz[4][4] = {
-            { float(cos(z)), float(-sin(z)),0, 0 },
-            { float(sin(z)), float(cos(z)), 0, 0 },
+        auto z = static_cast<float>(M_PI);
+        float _rz[4][4] = {
+            { cos(z), -sin(z),0, 0 },
+            { sin(z), cos(z), 0, 0 },
             { 0 , 0, 1, 0 },
             { 0, 0, 0, 1 }
         };

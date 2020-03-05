@@ -126,7 +126,7 @@ public class Streamer {
                 configStream(config);
             if(mListener != null)
                 mListener.config(config);
-            try (PipelineProfile pp = mPipeline.start(config)){}
+            mPipeline.start(config);
         }
     }
 

@@ -196,7 +196,7 @@ public:
             : _owner(owner)
         {}
 
-        bool try_sleep(std::chrono::milliseconds::rep ms)
+        bool try_sleep(int ms)
         {
             using namespace std::chrono;
 

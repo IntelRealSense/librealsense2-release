@@ -14,7 +14,6 @@
 namespace rs2
 {
     class visualizer_2d;
-    class context;
 
     class viewer_ui_traits
     {
@@ -35,7 +34,7 @@ namespace rs2
         std::function<void(std::string)> on_file_drop = [](std::string) {};
         std::function<bool()>            on_load = []() { return false; };
 
-        ux_window(const char* title, context &ctx);
+        ux_window(const char* title);
 
         float width() const { return float(_width); }
         float height() const { return float(_height); }
@@ -122,7 +121,6 @@ namespace rs2
 
         std::string              _title;
         std::shared_ptr<visualizer_2d> _2d_vis;
-        context                  &_ctx;
 
         bool                     _is_ui_aligned = false;
     };

@@ -32,7 +32,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSIONS_REQUEST_CAMERA = 0;
     private static final int PERMISSIONS_REQUEST_WRITE = 1;
 
-    private boolean mPermissionsGranted = false;
+    private boolean mPermissionsGrunted = false;
 
     private Context mAppContext;
     private TextView mBackGroundText;
@@ -83,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        mPermissionsGranted = true;
+        mPermissionsGrunted = true;
     }
 
     @Override
@@ -98,14 +98,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        mPermissionsGranted = true;
+        mPermissionsGrunted = true;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        if(mPermissionsGranted)
+        if(mPermissionsGrunted)
             init();
         else
             Log.e(TAG, "missing permissions");

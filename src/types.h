@@ -193,11 +193,8 @@ namespace librealsense
     // Logging mechanism //
     ///////////////////////
 
-    typedef std::shared_ptr< rs2_log_callback > log_callback_ptr;
-
     void log_to_console(rs2_log_severity min_severity);
-    void log_to_file( rs2_log_severity min_severity, const char* file_path );
-    void log_to_callback( rs2_log_severity min_severity, log_callback_ptr callback );
+    void log_to_file(rs2_log_severity min_severity, const char * file_path);
 
 #if BUILD_EASYLOGGINGPP
 
@@ -502,14 +499,13 @@ namespace librealsense
     // Enumerated type support //
     /////////////////////////////
 
-#define RS2_ENUM_HELPERS(TYPE, PREFIX) RS2_ENUM_HELPERS_CUSTOMIZED(TYPE, PREFIX, 0, RS2_##PREFIX##_COUNT)
 
-#define RS2_ENUM_HELPERS_CUSTOMIZED(TYPE, PREFIX, START, END) LRS_EXTENSION_API const char* get_string(TYPE value); \
-        inline bool is_valid(TYPE value) { return value >= START && value <END; } \
+#define RS2_ENUM_HELPERS(TYPE, PREFIX) LRS_EXTENSION_API const char* get_string(TYPE value); \
+        inline bool is_valid(TYPE value) { return value >= 0 && value < RS2_##PREFIX##_COUNT; } \
         inline std::ostream & operator << (std::ostream & out, TYPE value) { if(is_valid(value)) return out << get_string(value); else return out << (int)value; } \
         inline bool try_parse(const std::string& str, TYPE& res)       \
         {                                                            \
-            for (int i = START; i < END; i++) {                      \
+            for (int i = 0; i < static_cast<int>(RS2_ ## PREFIX ## _COUNT); i++) {  \
                 auto v = static_cast<TYPE>(i);                       \
                 if(str == get_string(v)) { res = v; return true; }   \
             }                                                        \
@@ -530,10 +526,6 @@ namespace librealsense
     RS2_ENUM_HELPERS(rs2_notification_category, NOTIFICATION_CATEGORY)
     RS2_ENUM_HELPERS(rs2_playback_status, PLAYBACK_STATUS)
     RS2_ENUM_HELPERS(rs2_matchers, MATCHER)
-    RS2_ENUM_HELPERS(rs2_sensor_mode, SENSOR_MODE)
-    RS2_ENUM_HELPERS(rs2_l500_visual_preset, L500_VISUAL_PRESET)
-    RS2_ENUM_HELPERS_CUSTOMIZED(rs2_ambient_light, AMBIENT_LIGHT, RS2_AMBIENT_LIGHT_NO_AMBIENT, RS2_AMBIENT_LIGHT_LOW_AMBIENT)
-
     ////////////////////////////////////////////
     // World's tiniest linear algebra library //
     ////////////////////////////////////////////
@@ -589,13 +581,13 @@ namespace librealsense
     }
     inline bool operator==(const rs2_extrinsics& a, const rs2_extrinsics& b)
     {
-        for (int i = 0; i < 3; i++)
-            if (a.translation[i] != b.translation[i])
+        for (int i = 0; i < 3; i++) 
+            if (a.translation[i] != b.translation[i]) 
                 return false;
         for (int j = 0; j < 3; j++)
             for (int i = 0; i < 3; i++)
-                if (std::fabs(a.rotation[j * 3 + i] - b.rotation[j * 3 + i])
-                     > std::numeric_limits<float>::epsilon())
+                if (std::fabs(a.rotation[j * 3 + i] - b.rotation[j * 3 + i]) 
+                     > std::numeric_limits<float>::epsilon()) 
                     return false;
         return true;
     }
@@ -644,7 +636,7 @@ namespace librealsense
             uint32_t framerate = 0,
             resolution_func res_func = [](resolution res) { return res; }) :
             format(fmt), stream(strm), index(idx), height(h), width(w), stream_resolution(res_func), fps(framerate)
-        {}
+        {};
 
         rs2_format format;
         rs2_stream stream;
@@ -699,7 +691,7 @@ namespace librealsense
     struct pixel_format_unpacker
     {
         bool requires_processing;
-        void(*unpack)(byte * const dest[], const byte * source, int width, int height, int actual_size, int input_size);
+        void(*unpack)(byte * const dest[], const byte * source, int width, int height, int actual_size);
         std::vector<stream_output> outputs;
 
         platform::stream_profile get_uvc_profile(const stream_profile& request, uint32_t fourcc, const std::vector<platform::stream_profile>& uvc_profiles) const
@@ -1017,6 +1009,7 @@ namespace librealsense
         void release() { delete this; }
     };
 
+    typedef std::unique_ptr<rs2_log_callback, void(*)(rs2_log_callback*)> log_callback_ptr;
     typedef std::shared_ptr<rs2_frame_callback> frame_callback_ptr;
     typedef std::shared_ptr<rs2_frame_processor_callback> frame_processor_callback_ptr;
     typedef std::shared_ptr<rs2_notifications_callback> notifications_callback_ptr;
@@ -1489,9 +1482,6 @@ namespace librealsense
             polling(cancellable_timer);
         }), _devices_data()
         {
-            _devices_data = {   _backend->query_uvc_devices(),
-                                _backend->query_usb_devices(),
-                                _backend->query_hid_devices() };
         }
 
         ~polling_device_watcher()
@@ -1522,6 +1512,10 @@ namespace librealsense
         {
             stop();
             _callback = std::move(callback);
+            _devices_data = {   _backend->query_uvc_devices(),
+                                _backend->query_usb_devices(),
+                                _backend->query_hid_devices() };
+
             _active_object.start();
         }
 
@@ -1815,9 +1809,6 @@ std::vector<std::shared_ptr<T>> subtract_sets(const std::vector<std::shared_ptr<
 
     inline res_type get_res_type(uint32_t width, uint32_t height)
     {
-        if (width == 256) // Crop resolution
-            return res_type::high_resolution;
-
         if (width == 640)
             return res_type::medium_resolution;
         else if (width < 640)

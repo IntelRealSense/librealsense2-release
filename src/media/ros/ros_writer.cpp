@@ -8,7 +8,6 @@
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/zero-order.h"
-#include "proc/depth-decompress.h"
 #include "ros_writer.h"
 #include "l500/l500-motion.h"
 #include "l500/l500-depth.h"
@@ -419,9 +418,6 @@ namespace librealsense
         case RS2_EXTENSION_VIDEO:
         case RS2_EXTENSION_ROI:
         case RS2_EXTENSION_DEPTH_SENSOR:
-        case RS2_EXTENSION_COLOR_SENSOR:
-        case RS2_EXTENSION_MOTION_SENSOR:
-        case RS2_EXTENSION_FISHEYE_SENSOR:
         case RS2_EXTENSION_DEPTH_STEREO_SENSOR:
             break;
         case RS2_EXTENSION_VIDEO_PROFILE:
@@ -547,7 +543,6 @@ namespace librealsense
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_TEMPORAL_FILTER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_HOLE_FILLING_FILTER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_ZERO_ORDER_FILTER);
-        RETURN_IF_EXTENSION(block, RS2_EXTENSION_DEPTH_HUFFMAN_DECODER);
 
 #undef RETURN_IF_EXTENSION
 

@@ -34,12 +34,7 @@ namespace librealsense
                 else
                     LOG_ERROR("active request didn't return on time");
             } );
-            if (_endpoint->get_type() == RS2_USB_ENDPOINT_BULK)
-                libusb_fill_bulk_transfer(_transfer.get(), dev_handle, _endpoint->get_address(), NULL, 0, internal_callback, NULL, 0);
-            else if (_endpoint->get_type() == RS2_USB_ENDPOINT_INTERRUPT)
-                libusb_fill_interrupt_transfer(_transfer.get(), dev_handle, _endpoint->get_address(), NULL, 0, internal_callback, NULL, 0);
-            else
-                LOG_ERROR("Unable to fill a usb request for unknown type " << _endpoint->get_type());
+            libusb_fill_bulk_transfer(_transfer.get(), dev_handle, _endpoint->get_address(), NULL, 0, internal_callback, NULL, 0);
 
             _transfer->user_data = this;
         }

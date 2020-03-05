@@ -17,15 +17,6 @@ public class Updatable extends Device {
         return nCreateFlashBackup(mHandle);
     }
 
-    public synchronized byte[] createFlashBackup(){
-        mListener = new ProgressListener() {
-            @Override
-            public void onProgress(float progress) {
-            }
-        };
-        return createFlashBackup(mListener);
-    }
-
     Updatable(long handle){
         super(handle);
         mOwner = false;

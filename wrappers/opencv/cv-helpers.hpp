@@ -23,10 +23,9 @@ cv::Mat frame_to_mat(const rs2::frame& f)
     }
     else if (f.get_profile().format() == RS2_FORMAT_RGB8)
     {
-        auto r_rgb = Mat(Size(w, h), CV_8UC3, (void*)f.get_data(), Mat::AUTO_STEP);
-        Mat r_bgr;
-        cvtColor(r_rgb, r_bgr, COLOR_RGB2BGR);
-        return r_bgr;
+        auto r = Mat(Size(w, h), CV_8UC3, (void*)f.get_data(), Mat::AUTO_STEP);
+        cvtColor(r, r, COLOR_RGB2BGR);
+        return r;
     }
     else if (f.get_profile().format() == RS2_FORMAT_Z16)
     {

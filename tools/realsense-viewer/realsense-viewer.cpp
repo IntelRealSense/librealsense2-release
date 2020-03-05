@@ -246,10 +246,10 @@ int main(int argc, const char** argv) try
 {
     rs2::log_to_console(RS2_LOG_SEVERITY_WARN);
 
-    context ctx;
-    ux_window window("Intel RealSense Viewer", ctx);
+    ux_window window("Intel RealSense Viewer");
 
     // Create RealSense Context
+    context ctx;
     device_changes devices_connection_changes(ctx);
     std::vector<std::pair<std::string, std::string>> device_names;
 
@@ -259,7 +259,8 @@ int main(int argc, const char** argv) try
     std::shared_ptr<device_models_list> device_models = std::make_shared<device_models_list>();
     device_model* device_to_remove = nullptr;
 
-    viewer_model viewer_model(ctx);
+    viewer_model viewer_model;
+    viewer_model.ctx = ctx;
 
     std::vector<device> connected_devs;
     std::mutex m;
