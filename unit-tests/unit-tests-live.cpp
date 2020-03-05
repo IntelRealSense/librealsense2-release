@@ -46,9 +46,7 @@ TEST_CASE("Sync sanity", "[live][!mayfail]") {
 
         std::vector<std::vector<double>> all_timestamps;
         auto actual_fps = fps;
-        bool hw_timestamp_domain = false;
-        bool system_timestamp_domain = false;
-        bool global_timestamp_domain = false;
+
         for (auto i = 0; i < 200; i++)
         {
             auto frames = sync.wait_for_frames(5000);
@@ -57,6 +55,10 @@ TEST_CASE("Sync sanity", "[live][!mayfail]") {
             std::vector<double> timestamps;
             for (auto&& f : frames)
             {
+                bool hw_timestamp_domain = false;
+                bool system_timestamp_domain = false;
+                bool global_timestamp_domain = false;
+
                 if (f.supports_frame_metadata(RS2_FRAME_METADATA_ACTUAL_FPS))
                 {
                     auto val = static_cast<int>(f.get_frame_metadata(RS2_FRAME_METADATA_ACTUAL_FPS));
@@ -75,16 +77,16 @@ TEST_CASE("Sync sanity", "[live][!mayfail]") {
                 {
                     global_timestamp_domain = true;
                 }
+                CAPTURE(hw_timestamp_domain);
+                CAPTURE(system_timestamp_domain);
+                CAPTURE(global_timestamp_domain);
+                REQUIRE(int(hw_timestamp_domain) + int(system_timestamp_domain) + int(global_timestamp_domain) == 1);
+
                 timestamps.push_back(f.get_timestamp());
             }
             all_timestamps.push_back(timestamps);
-
         }
 
-        CAPTURE(hw_timestamp_domain);
-        CAPTURE(system_timestamp_domain);
-        CAPTURE(global_timestamp_domain);
-        REQUIRE(int(hw_timestamp_domain) + int(system_timestamp_domain) + int(global_timestamp_domain) == 1);
 
         size_t num_of_partial_sync_sets = 0;
         for (auto set_timestamps : all_timestamps)
@@ -101,7 +103,8 @@ TEST_CASE("Sync sanity", "[live][!mayfail]") {
 
         CAPTURE(num_of_partial_sync_sets);
         CAPTURE(all_timestamps.size());
-        REQUIRE((float(num_of_partial_sync_sets) / all_timestamps.size()) < 0.9f);
+        // Require some coherent framesets, no KPI
+        REQUIRE((float(num_of_partial_sync_sets) / all_timestamps.size()) < 1.f);
 
         for (auto s : dev.query_sensors())
         {
@@ -920,7 +923,7 @@ TEST_CASE("Advanced Mode JSON", "[live][AdvMd]") {
             REQUIRE_NOTHROW(presets_sensor.set_option(RS2_OPTION_VISUAL_PRESET, RS2_RS400_VISUAL_PRESET_COUNT - 1));
             REQUIRE_NOTHROW(advanced.load_json(json1));
             REQUIRE_NOTHROW(json2 = advanced.serialize_json());
-            REQUIRE_NOTHROW(json1 == json2);
+            REQUIRE(json1 == json2);
 
             dev = do_with_waiting_for_camera_connection(ctx, dev, serial, [&]()
             {
@@ -2898,7 +2901,7 @@ static const std::map< dev_type, device_profiles> pipeline_default_configuration
 /* RS400/PSR*/          { { "0AD1", true}  ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_RGB8, 1280, 720, 1 } }, 30, true}},
 /* RS410/ASR*/          { { "0AD2", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_RGB8, 1280, 720, 1 } }, 30, true }},
 /* D410/USB2*/          { { "0AD2", false },{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 640, 480, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_RGB8, 640, 480, 1 } }, 15, true } },
-/* RS415/ASRC*/         { { "0AD3", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 640, 480, 0 } }, 30, true }},
+/* RS415/ASRC*/         { { "0AD3", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 1280, 720, 0 } }, 30, true }},
 /* D415/USB2*/          { { "0AD3", false },{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 640, 480, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 640, 480, 0 } }, 15, true } },
 /* RS430/AWG*/          { { "0AD4", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_Y8, 1280, 720, 1 } }, 30, true }},
 /* RS430_MM/AWGT*/      { { "0AD5", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_Y8, 1280, 720, 1 } }, 30, true }},
@@ -2908,7 +2911,7 @@ static const std::map< dev_type, device_profiles> pipeline_default_configuration
 /* RS400_MM/PSR*/       { { "0B00", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_RGB8, 1280, 720, 1 } }, 30, true } },
 /* RS430_MM_RGB/AWGTC*/ { { "0B01", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 1280, 720, 0 } }, 30, true }},
 /* RS405/D460/DS5U*/    { { "0B03", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_INFRARED, RS2_FORMAT_RGB8, 1280, 720, 1 } }, 30, true }},
-/* RS435_RGB/AWGC*/     { { "0B07", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 640, 480, 0 } }, 30, true }},
+/* RS435_RGB/AWGC*/     { { "0B07", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 1280, 720, 0 } }, 30, true }},
 /* D435/USB2*/          { { "0B07", false },{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 640, 480, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 640, 480, 0 } }, 15, true } },
 // TODO - IMU data profiles are pending FW timestamp fix
 /* D435I/USB3*/         { { "0B3A", true } ,{ { { RS2_STREAM_DEPTH, RS2_FORMAT_Z16, 1280, 720, 0 },{ RS2_STREAM_COLOR, RS2_FORMAT_RGB8, 1280, 720, 0 } }, 30, true } },
@@ -3820,6 +3823,112 @@ TEST_CASE("Per-frame metadata sanity check", "[live][!mayfail]") {
                 }
             }
         }
+    }
+}
+
+TEST_CASE("color sensor API", "[live][options]")
+{
+    rs2::context ctx;
+    if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.17.1"))
+    {
+        rs2::device dev;
+        rs2::pipeline pipe(ctx);
+        rs2::config cfg;
+        rs2::pipeline_profile profile;
+        REQUIRE_NOTHROW(profile = cfg.resolve(pipe));
+        REQUIRE(profile);
+        REQUIRE_NOTHROW(dev = profile.get_device());
+        REQUIRE(dev);
+        dev_type PID = get_PID(dev);
+        if (!librealsense::val_in_range(PID.first, { std::string("0AA5"),
+                                                     std::string("0B48"),
+                                                     std::string("0AD3"),
+                                                     std::string("0AD4"),
+                                                     std::string("0AD5"),
+                                                     std::string("0B01"),
+                                                     std::string("0B07"),
+                                                     std::string("0B3A"),
+                                                     std::string("0B3D") }))
+        {
+            WARN("Skipping test - no motion sensor is device type: " << PID.first << (PID.second ? " USB3" : " USB2"));
+            return;
+        }
+        auto sensor = profile.get_device().first<rs2::color_sensor>();
+        std::string module_name = sensor.get_info(RS2_CAMERA_INFO_NAME);
+        std::cout << "depth sensor: " << librealsense::get_string(RS2_EXTENSION_DEPTH_SENSOR) << "\n";
+        std::cout << "color sensor: " << librealsense::get_string(RS2_EXTENSION_COLOR_SENSOR) << "\n";
+        std::cout << "motion sensor: " << librealsense::get_string(RS2_EXTENSION_MOTION_SENSOR) << "\n";
+        std::cout << "fisheye sensor: " << librealsense::get_string(RS2_EXTENSION_FISHEYE_SENSOR) << "\n";
+        REQUIRE(sensor.is<rs2::color_sensor>());
+        REQUIRE(!sensor.is<rs2::motion_sensor>());
+        REQUIRE(!sensor.is<rs2::depth_sensor>());
+        REQUIRE(!sensor.is<rs2::fisheye_sensor>());
+        REQUIRE(module_name.size() > 0);
+    }
+}
+
+TEST_CASE("motion sensor API", "[live][options]")
+{
+    rs2::context ctx;
+    if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.17.1"))
+    {
+        rs2::device dev;
+        rs2::pipeline pipe(ctx);
+        rs2::config cfg;
+        rs2::pipeline_profile profile;
+        REQUIRE_NOTHROW(profile = cfg.resolve(pipe));
+        REQUIRE(profile);
+        REQUIRE_NOTHROW(dev = profile.get_device());
+        REQUIRE(dev);
+        dev_type PID = get_PID(dev);
+        if (!librealsense::val_in_range(PID.first, { std::string("0AD5"),
+                                                     std::string("0AFE"),
+                                                     std::string("0AFF"),
+                                                     std::string("0B00"),
+                                                     std::string("0B01"),
+                                                     std::string("0B3A"),
+                                                     std::string("0B3D")}))
+        {
+            WARN("Skipping test - no motion sensor is device type: " << PID.first << (PID.second ? " USB3" : " USB2"));
+            return;
+        }
+        auto sensor = profile.get_device().first<rs2::motion_sensor>();
+        std::string module_name = sensor.get_info(RS2_CAMERA_INFO_NAME);
+        REQUIRE(!sensor.is<rs2::color_sensor>());
+        REQUIRE(!sensor.is<rs2::depth_sensor>());
+        REQUIRE(module_name.size() > 0);
+    }
+}
+
+TEST_CASE("fisheye sensor API", "[live][options]")
+{
+    rs2::context ctx;
+    if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.17.1"))
+    {
+        rs2::device dev;
+        rs2::pipeline pipe(ctx);
+        rs2::config cfg;
+        rs2::pipeline_profile profile;
+        REQUIRE_NOTHROW(profile = cfg.resolve(pipe));
+        REQUIRE(profile);
+        REQUIRE_NOTHROW(dev = profile.get_device());
+        REQUIRE(dev);
+
+        dev_type PID = get_PID(dev);
+        if (!librealsense::val_in_range(PID.first, { std::string("0AD5"),
+                                                     std::string("0AFE"),
+                                                     std::string("0AFF"),
+                                                     std::string("0B00"),
+                                                     std::string("0B01") }))
+        {
+            WARN("Skipping test - no fisheye sensor is device type: " << PID.first << (PID.second ? " USB3" : " USB2"));
+            return;
+        }
+        auto sensor = profile.get_device().first<rs2::fisheye_sensor>();
+        std::string module_name = sensor.get_info(RS2_CAMERA_INFO_NAME);
+        REQUIRE(!sensor.is<rs2::color_sensor>());
+        REQUIRE(!sensor.is<rs2::depth_sensor>());
+        REQUIRE(module_name.size() > 0);
     }
 }
 
@@ -4997,6 +5106,26 @@ TEST_CASE("Syncer try wait for frames", "[live][software-device]") {
     }
 }
 
+TEST_CASE("Test Motion Module Extension", "[software-device][using_pipeline][projection]") {
+    rs2::context ctx;
+    if (!make_context(SECTION_FROM_TEST_NAME, &ctx))
+        return;
+    std::string folder_name = get_folder_path(special_folder::temp_folder);
+    const std::string filename = folder_name + "D435i_Depth_and_IMU.bag";
+    REQUIRE(file_exists(filename));
+    auto dev = ctx.load_device(filename);
+    dev.set_real_time(false);
+
+    syncer sync;
+    std::vector<sensor> sensors = dev.query_sensors();
+    for (auto s : sensors)
+    {
+        REQUIRE((std::string(s.get_info(RS2_CAMERA_INFO_NAME)) == "Stereo Module") == (s.is<rs2::depth_sensor>()));
+        REQUIRE((std::string(s.get_info(RS2_CAMERA_INFO_NAME)) == "RGB Camera") == (s.is<rs2::color_sensor>()));
+        REQUIRE((std::string(s.get_info(RS2_CAMERA_INFO_NAME)) == "Motion Module") == (s.is<rs2::motion_sensor>()));
+    }
+}
+
 // Marked as MayFail due to DSO-11753. TODO -revisit once resolved
 TEST_CASE("Projection from recording", "[software-device][using_pipeline][projection][!mayfail]") {
     rs2::context ctx;
@@ -5058,6 +5187,8 @@ TEST_CASE("Projection from recording", "[software-device][using_pipeline][projec
         {
             REQUIRE_NOTHROW(depth_scale = s.as<rs2::depth_sensor>().get_depth_scale());
         }
+        REQUIRE((std::string(s.get_info(RS2_CAMERA_INFO_NAME)) == "Stereo Module") == (s.is<rs2::depth_sensor>()));
+        REQUIRE((std::string(s.get_info(RS2_CAMERA_INFO_NAME)) == "RGB Camera") == (s.is<rs2::color_sensor>()));
     }
 
     int count = 0;
@@ -5275,7 +5406,7 @@ void compare(std::vector<filter> first, std::vector<std::shared_ptr<filter>> sec
     }
 }
 
-TEST_CASE("Sensor get recommended filters", "[live]") {
+TEST_CASE("Sensor get recommended filters", "[live][!mayfail]") {
     //Require at least one device to be plugged in
     rs2::context ctx;
 
@@ -5296,6 +5427,7 @@ TEST_CASE("Sensor get recommended filters", "[live]") {
         dec_color
     };
 
+    auto huff_decoder = std::make_shared<depth_huffman_decoder>();
     auto dec_depth = std::make_shared<decimation_filter>();
     dec_depth->set_option(RS2_OPTION_STREAM_FILTER, RS2_STREAM_DEPTH);
     dec_depth->set_option(RS2_OPTION_STREAM_FORMAT_FILTER, RS2_FORMAT_Z16);
@@ -5317,6 +5449,7 @@ TEST_CASE("Sensor get recommended filters", "[live]") {
     auto disparity2depth = std::make_shared<disparity_transform>(false);
 
     sensors_to_filters[depth_stereo] = {
+        huff_decoder,
         dec_depth,
         threshold,
         depth2disparity,
@@ -5538,6 +5671,9 @@ TEST_CASE("Positional_Sensors_API", "[live]")
                     REQUIRE(test_or.z == Approx(vnv_or.z));
                     REQUIRE(test_or.w == Approx(vnv_or.w));
 
+                    REQUIRE_NOTHROW(res = pose_snr.remove_static_node("wp1"));
+                    REQUIRE_NOTHROW(!(res = pose_snr.remove_static_node("wp1")));
+
                     REQUIRE_NOTHROW(pipe.stop());
                 }
             }
@@ -5670,5 +5806,100 @@ TEST_CASE("get_sensor_from_frame", "[live][using_pipeline]")
             }
         }
         REQUIRE_NOTHROW(pipe.stop());
+    }
+}
+
+TEST_CASE("l500_presets_set_preset", "[live]")
+{
+    std::vector<rs2_option> _hw_controls = { RS2_OPTION_VISUAL_PRESET, RS2_OPTION_PRE_PROCESSING_SHARPENING, RS2_OPTION_CONFIDENCE_THRESHOLD, RS2_OPTION_POST_PROCESSING_SHARPENING, RS2_OPTION_NOISE_FILTERING, RS2_OPTION_AVALANCHE_PHOTO_DIODE, RS2_OPTION_LASER_POWER ,RS2_OPTION_MIN_DISTANCE, RS2_OPTION_INVALIDATION_BYPASS };
+    // Require at least one device to be plugged in
+    rs2::context ctx;
+    if (make_context(SECTION_FROM_TEST_NAME, &ctx, "2.31.0"))
+    {
+        std::vector<sensor> list;
+        REQUIRE_NOTHROW(list = ctx.query_all_sensors());
+        REQUIRE(list.size() > 0);
+
+         sensor ds;
+
+         for (auto&& s : list)
+         {
+             if (s.is < rs2::depth_sensor>())
+             {
+                 ds = s.as < rs2::depth_sensor>();
+                 break;
+             }
+         }
+
+        REQUIRE(ds);
+
+        for (auto&& option : _hw_controls)
+        {
+            REQUIRE(ds.supports(option));
+        }
+        REQUIRE(ds.supports(RS2_OPTION_SENSOR_MODE));
+
+        auto presets = ds.get_option_range(RS2_OPTION_VISUAL_PRESET);
+        REQUIRE(presets.min == RS2_L500_VISUAL_PRESET_CUSTOM);
+        REQUIRE(presets.max == RS2_L500_VISUAL_PRESET_COUNT - 1);
+        REQUIRE(presets.step == 1);
+        REQUIRE(presets.def == RS2_L500_VISUAL_PRESET_DEFAULT);
+
+        std::map< rs2_option, option_range> options_range;
+
+        for (auto&& option : _hw_controls)
+        {
+            if (option != RS2_OPTION_VISUAL_PRESET)
+            {
+                options_range[option] = ds.get_option_range(option);
+            }
+        }
+
+        std::map<int, int> expected_ambient_per_preset =
+        {
+            {RS2_L500_VISUAL_PRESET_NO_AMBIENT, RS2_AMBIENT_LIGHT_NO_AMBIENT},
+            {RS2_L500_VISUAL_PRESET_LOW_AMBIENT, RS2_AMBIENT_LIGHT_LOW_AMBIENT},
+            {RS2_L500_VISUAL_PRESET_MAX_RANGE, RS2_AMBIENT_LIGHT_NO_AMBIENT},
+            {RS2_L500_VISUAL_PRESET_SHORT_RANGE, RS2_AMBIENT_LIGHT_LOW_AMBIENT}
+        };
+
+        std::map<int, int> expected_laser_power_per_preset =
+        {
+            {RS2_L500_VISUAL_PRESET_LOW_AMBIENT, 100},
+            {RS2_L500_VISUAL_PRESET_MAX_RANGE, 100}
+        };
+
+        std::map< float, float> apd_per_ambient;
+        for (auto i : expected_ambient_per_preset)
+        {
+            std::vector<int> resolutions{ RS2_SENSOR_MODE_XGA, RS2_SENSOR_MODE_VGA };
+            for (auto res : resolutions)
+            {
+                ds.set_option(RS2_OPTION_SENSOR_MODE, res);
+                ds.set_option(RS2_OPTION_VISUAL_PRESET, i.first);
+                CAPTURE(ds.get_option(RS2_OPTION_AMBIENT_LIGHT));
+                REQUIRE(ds.get_option(RS2_OPTION_AMBIENT_LIGHT) == i.second);
+                apd_per_ambient[ds.get_option(RS2_OPTION_AMBIENT_LIGHT)] = ds.get_option(RS2_OPTION_AVALANCHE_PHOTO_DIODE);
+                auto expected_laser_power = expected_laser_power_per_preset.find(i.first);
+                if (expected_laser_power != expected_laser_power_per_preset.end())
+                {
+                    CAPTURE(ds.get_option(RS2_OPTION_LASER_POWER));
+                    REQUIRE(ds.get_option(RS2_OPTION_LASER_POWER) == expected_laser_power->second);
+                }
+
+            }
+        }
+
+        CAPTURE(apd_per_ambient[RS2_SENSOR_MODE_XGA]);
+        CAPTURE(apd_per_ambient[RS2_SENSOR_MODE_VGA]);
+        REQUIRE(apd_per_ambient[RS2_SENSOR_MODE_XGA] != apd_per_ambient[RS2_SENSOR_MODE_VGA]);
+        for (auto&& opt : options_range)
+        {
+            ds.set_option(opt.first, opt.second.min);
+            CAPTURE(ds.get_option(RS2_OPTION_VISUAL_PRESET));
+            REQUIRE(ds.get_option(RS2_OPTION_VISUAL_PRESET) == RS2_L500_VISUAL_PRESET_CUSTOM);
+            ds.set_option(RS2_OPTION_VISUAL_PRESET, RS2_L500_VISUAL_PRESET_LOW_AMBIENT);
+        }
+       
     }
 }
