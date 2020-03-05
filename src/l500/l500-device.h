@@ -78,11 +78,41 @@ namespace librealsense
 
         void force_hardware_reset() const;
         bool _is_locked = true;
+
+        std::vector<rs2_option> _advanced_options;
     };
 
     class l500_notification_decoder : public notification_decoder
     {
     public:
         notification decode(int value) override;
+    };
+
+    class action_delayer
+    {
+    public:
+
+        void do_after_delay(std::function<void()> action, int milliseconds = 2000)
+        {
+            wait(milliseconds);
+            action();
+            _last_update = std::chrono::system_clock::now();
+        }
+
+    private:
+        void wait(int milliseconds)
+        {
+            auto now = std::chrono::system_clock::now();
+            auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - _last_update).count();
+
+            while (diff < milliseconds)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                now = std::chrono::system_clock::now();
+                diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - _last_update).count();
+            }
+        }
+
+        std::chrono::system_clock::time_point _last_update;
     };
 }
