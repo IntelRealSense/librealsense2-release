@@ -23,7 +23,6 @@
 #include "fw-update/fw-update-factory.h"
 
 #ifdef WITH_TRACKING
-#include "tm2/tm-context.h"
 #include "tm2/tm-info.h"
 #endif
 
@@ -81,23 +80,16 @@ bool contains(const std::shared_ptr<librealsense::device_info>& first,
             second_data.playback_devices.end())
             return false;
     }
-    for (auto&& tm : first_data.tm2_devices)
-    {
-        if (std::find(second_data.tm2_devices.begin(),
-            second_data.tm2_devices.end(), tm) ==
-            second_data.tm2_devices.end())
-            return false;
-    }
     return true;
 }
 
 namespace librealsense
 {
-    std::map<uint32_t, rs2_format> platform_color_fourcc_to_rs2_format = {
+    const std::map<uint32_t, rs2_format> platform_color_fourcc_to_rs2_format = {
         {rs_fourcc('Y','U','Y','2'), RS2_FORMAT_YUYV},
         {rs_fourcc('U','Y','V','Y'), RS2_FORMAT_UYVY}
     };
-    std::map<uint32_t, rs2_stream> platform_color_fourcc_to_rs2_stream = {
+    const std::map<uint32_t, rs2_stream> platform_color_fourcc_to_rs2_stream = {
         {rs_fourcc('Y','U','Y','2'), RS2_STREAM_COLOR},
         {rs_fourcc('U','Y','V','Y'), RS2_STREAM_COLOR}
     };
@@ -109,25 +101,17 @@ namespace librealsense
                      std::string min_api_version)
         : _devices_changed_callback(nullptr, [](rs2_devices_changed_callback*){})
     {
-        LOG_DEBUG("Librealsense " << std::string(std::begin(rs2_api_version),std::end(rs2_api_version)));
+        static bool version_logged=false;
+        if (!version_logged)
+        {
+            version_logged = true;
+            LOG_DEBUG("Librealsense " << std::string(std::begin(rs2_api_version),std::end(rs2_api_version)));
+        }
 
         switch(type)
         {
         case backend_type::standard:
             _backend = platform::create_backend();
-#if WITH_TRACKING
-            _tm2_context = std::make_shared<tm2_context>(this);
-            _tm2_context->on_device_changed += [this](std::shared_ptr<tm2_info> removed, std::shared_ptr<tm2_info> added)-> void
-            {
-                std::vector<rs2_device_info> rs2_devices_info_added;
-                std::vector<rs2_device_info> rs2_devices_info_removed;
-                if (removed)
-                    rs2_devices_info_removed.push_back({ shared_from_this(), removed });
-                if (added)
-                    rs2_devices_info_added.push_back({ shared_from_this(), added });
-                raise_devices_changed(rs2_devices_info_removed, rs2_devices_info_added);
-            };
-#endif
             break;
         case backend_type::record:
             _backend = std::make_shared<platform::record_backend>(platform::create_backend(), filename, section, mode);
@@ -321,9 +305,6 @@ namespace librealsense
     {
 
         platform::backend_device_group devices(_backend->query_uvc_devices(), _backend->query_usb_devices(), _backend->query_hid_devices());
-#ifdef WITH_TRACKING
-        if (_tm2_context) _tm2_context->create_manager();
-#endif
         return create_devices(devices, _playback_devices, mask);
     }
 
@@ -353,9 +334,9 @@ namespace librealsense
         }
 
 #ifdef WITH_TRACKING
-        if (_tm2_context)
+        if (mask & RS2_PRODUCT_LINE_T200)
         {
-            auto tm2_devices = tm2_info::pick_tm2_devices(ctx, _tm2_context->get_manager(), _tm2_context->query_devices());
+            auto tm2_devices = tm2_info::pick_tm2_devices(ctx, devices.usb_devices);
             std::copy(begin(tm2_devices), end(tm2_devices), std::back_inserter(list));
         }
 #endif
@@ -512,13 +493,12 @@ namespace librealsense
 
             for (auto&& hid : hids)
             {
-                if (hid.unique_id != "")
+                if( ! hid.unique_id.empty() )
                 {
                     std::stringstream(hid.vid) >> std::hex >> vid;
                     std::stringstream(hid.pid) >> std::hex >> pid;
 
-                    if ((hid.unique_id == unique_id) || // Linux check
-                        ((hid.unique_id == "*") && (hid.serial_number == device_serial))) // Windows check
+                    if (hid.unique_id == unique_id)
                     {
                         hid_group.push_back(hid);
                     }
@@ -576,7 +556,6 @@ namespace librealsense
 #if WITH_TRACKING
     void context::unload_tracking_module()
     {
-        _tm2_context.reset();
     }
 #endif
 
