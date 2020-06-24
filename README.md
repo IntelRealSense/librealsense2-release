@@ -1,3 +1,26 @@
+## librealsense2 (kinetic) - 2.35.2-1
+
+The packages in the `librealsense2` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release --ros-distro kinetic --track kinetic librealsense2 --edit` on `Wed, 24 Jun 2020 10:29:03 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: https://github.com/IntelRealSense/librealsense2-release.git
+- rosdistro version: `2.33.1-2`
+- old version: `2.33.1-3`
+- new version: `2.35.2-1`
+
+Versions of tools used:
+
+- bloom version: `0.9.7`
+- catkin_pkg version: `0.4.14`
+- rosdep version: `0.17.1`
+- rosdistro version: `0.8.0`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (kinetic) - 2.33.1-2
 
 The packages in the `librealsense2` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release --ros-distro kinetic --track kinetic librealsense2 --edit` on `Sun, 08 Mar 2020 06:57:58 -0000`
