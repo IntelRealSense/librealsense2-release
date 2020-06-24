@@ -47,6 +47,14 @@ namespace librealsense
         calc_linear_coefs();
     }
 
+    void CLinearCoefficients::add_const_y_coefs(double dy)
+    {
+        for (auto &&sample : _last_values)
+        {
+            sample._y += dy;
+        }
+    }
+
     void CLinearCoefficients::calc_linear_coefs()
     {
         // Calculate linear coefficients, based on calculus described in: https://www.statisticshowto.datasciencecentral.com/probability-and-statistics/regression-analysis/find-a-linear-regression-equation/
@@ -117,6 +125,7 @@ namespace librealsense
         _coefs(15),
         _users_count(0),
         _is_ready(false),
+        _min_command_delay(1000),
         _active_object([this](dispatcher::cancellable_timer cancellable_timer)
             {
                 polling(cancellable_timer);
@@ -166,7 +175,14 @@ namespace librealsense
 
             double sample_hw_time = _device->get_device_time_ms();
             double system_time_finish = duration<double, std::milli>(system_clock::now().time_since_epoch()).count();
-            double system_time((system_time_finish + system_time_start) / 2);
+            double command_delay = (system_time_finish-system_time_start)/2;
+
+            if (command_delay < _min_command_delay)
+            {
+                _coefs.add_const_y_coefs(command_delay - _min_command_delay);
+                _min_command_delay = command_delay;
+            }
+            double system_time(system_time_finish - _min_command_delay);
             if (sample_hw_time < _last_sample_hw_time)
             {
                 // A time loop happend:
@@ -178,6 +194,10 @@ namespace librealsense
             _coefs.add_value(crnt_sample);
             _is_ready = true;
             return true;
+        }
+        catch (const io_exception& ex)
+        {
+            LOG_DEBUG("Temporary skip during time_diff_keeper polling: " << ex.what());
         }
         catch (const wrong_api_call_sequence_exception& ex)
         {
