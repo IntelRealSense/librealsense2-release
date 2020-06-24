@@ -23,6 +23,22 @@
 
 namespace rs2
 {
+    void GLAPIENTRY MessageCallback(GLenum source,
+        GLenum type,
+        GLuint id,
+        GLenum severity,
+        GLsizei length,
+        const GLchar* message,
+        const void* userParam)
+    {
+        if (type == GL_DEBUG_TYPE_ERROR)
+        {
+            fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+                (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+                type, severity, message);
+        }
+    }
+
     void prepare_config_file()
     {
         config_file::instance().set_default(configurations::update::allow_rc_firmware, false);
@@ -33,11 +49,13 @@ namespace rs2
         config_file::instance().set_default(configurations::window::saved_pos, false);
         config_file::instance().set_default(configurations::window::saved_size, false);
 
+        config_file::instance().set_default(configurations::viewer::is_measuring, false);
         config_file::instance().set_default(configurations::viewer::log_filename, get_folder_path(special_folder::user_documents) + "librealsense.log");
         config_file::instance().set_default(configurations::viewer::log_to_console, true);
         config_file::instance().set_default(configurations::viewer::log_to_file, false);
         config_file::instance().set_default(configurations::viewer::log_severity, 2);
         config_file::instance().set_default(configurations::viewer::metric_system, true);
+        config_file::instance().set_default(configurations::viewer::ground_truth_r, 2500);
 
         config_file::instance().set_default(configurations::record::compression_mode, 2); // Let the device decide
         config_file::instance().set_default(configurations::record::default_path, get_folder_path(special_folder::user_documents));
@@ -45,6 +63,7 @@ namespace rs2
 
         config_file::instance().set_default(configurations::performance::show_fps, false);
         config_file::instance().set_default(configurations::performance::vsync, true);
+        config_file::instance().set_default(configurations::performance::occlusion_invalidation, true);
 
         config_file::instance().set_default(configurations::ply::mesh, true);
         config_file::instance().set_default(configurations::ply::use_normals, false);
@@ -83,19 +102,23 @@ namespace rs2
 
         if (use_glsl)
         {
+            config_file::instance().set_default(configurations::performance::show_skybox, true);
             config_file::instance().set_default(configurations::performance::font_oversample, 2);
             config_file::instance().set_default(configurations::performance::enable_msaa, false);
             config_file::instance().set_default(configurations::performance::msaa_samples, 2);
             config_file::instance().set_default(configurations::performance::glsl_for_processing, true);
             config_file::instance().set_default(configurations::performance::glsl_for_rendering, true);
+            config_file::instance().set_default(configurations::viewer::shading_mode, 2);
         }
         else
         {
+            config_file::instance().set_default(configurations::performance::show_skybox, false);
             config_file::instance().set_default(configurations::performance::font_oversample, 1);
             config_file::instance().set_default(configurations::performance::enable_msaa, false);
             config_file::instance().set_default(configurations::performance::msaa_samples, 2);
             config_file::instance().set_default(configurations::performance::glsl_for_processing, false);
             config_file::instance().set_default(configurations::performance::glsl_for_rendering, false);
+            config_file::instance().set_default(configurations::viewer::shading_mode, 0);
         }
 #endif
     }
@@ -120,6 +143,11 @@ namespace rs2
     void ux_window::link_hovered()
     {
         _link_hovered = true;
+    }
+
+    void ux_window::cross_hovered()
+    {
+        _cross_hovered = true;
     }
 
     void ux_window::setup_icon()
@@ -152,6 +180,7 @@ namespace rs2
         stbi_image_free(icon_256);
     }
 
+   
     void ux_window::open_window()
     {
         if (_win)
@@ -163,6 +192,7 @@ namespace rs2
             ImGui_ImplGlfw_Shutdown();
             glfwDestroyWindow(_win);
             glfwDestroyCursor(_hand_cursor);
+            glfwDestroyCursor(_cross_cursor);
             glfwTerminate();
         }
 
@@ -170,6 +200,7 @@ namespace rs2
             exit(1);
 
         _hand_cursor = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+        _cross_cursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
         {
             glfwWindowHint(GLFW_VISIBLE, 0);
@@ -279,6 +310,13 @@ namespace rs2
         glfwMakeContextCurrent(_win);
         gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
+        if (glDebugMessageCallback)
+        {
+            // During init, enable debug output
+            glEnable(GL_DEBUG_OUTPUT);
+            glDebugMessageCallback(MessageCallback, 0);
+        }
+
         glfwSetWindowPosCallback(_win, [](GLFWwindow* w, int x, int y)
         {
             config_file::instance().set(configurations::window::saved_pos, true);
@@ -317,7 +355,8 @@ namespace rs2
         glfwSetMouseButtonCallback(_win, [](GLFWwindow* w, int button, int action, int mods)
         {
             auto data = reinterpret_cast<ux_window*>(glfwGetWindowUserPointer(w));
-            data->_mouse.mouse_down = (button == GLFW_MOUSE_BUTTON_1) && (action != GLFW_RELEASE);
+            data->_mouse.mouse_down[0] = (button == GLFW_MOUSE_BUTTON_1) && (action != GLFW_RELEASE);
+            data->_mouse.mouse_down[1] = (button == GLFW_MOUSE_BUTTON_2) && (action != GLFW_RELEASE);
         });
         glfwSetScrollCallback(_win, [](GLFWwindow * w, double xoffset, double yoffset)
         {
@@ -414,7 +453,7 @@ namespace rs2
             _splash_tex.show({ 0.f,0.f,float(_width),float(_height) }, opacity);
         }
 
-        std::string hourglass = u8"\uf250";
+        std::string hourglass = u8"\uf251";
         static periodic_timer every_200ms(std::chrono::milliseconds(200));
         bool do_200ms = every_200ms;
         if (_query_devices && do_200ms)
@@ -550,8 +589,11 @@ namespace rs2
 
         if (_link_hovered)
             glfwSetCursor(_win, _hand_cursor);
+        else if (_cross_hovered)
+            glfwSetCursor(_win, _cross_cursor);
         else
             glfwSetCursor(_win, nullptr);
+        _cross_hovered = false;
         _link_hovered = false;
 
         return res;
@@ -575,6 +617,7 @@ namespace rs2
         glfwDestroyWindow(_win);
 
         glfwDestroyCursor(_hand_cursor);
+        glfwDestroyCursor(_cross_cursor);
 
         glfwTerminate();
     }
@@ -603,16 +646,25 @@ namespace rs2
         {
             open_window();
             _reload = false;
+            on_reload_complete();
         }
 
         int w = _width; int h = _height;
 
         glfwGetWindowSize(_win, &_width, &_height);
 
+        // Set minimum size 1
+        if (_width <= 0) _width = 1;
+        if (_height <= 0) _height = 1;
+
         int fw = _fb_width;
         int fh = _fb_height;
 
         glfwGetFramebufferSize(_win, &_fb_width, &_fb_height);
+
+        // Set minimum size 1
+        if (_fb_width <= 0) _fb_width = 1;
+        if (_fb_height <= 0) _fb_height = 1;
 
         if (fw != _fb_width || fh != _fb_height)
         {
@@ -698,4 +750,5 @@ namespace rs2
             _on_load_message.clear();
         }
     }
+
 }

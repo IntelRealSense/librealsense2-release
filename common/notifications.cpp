@@ -101,10 +101,8 @@ namespace rs2
         ImGui::PopStyleColor(6);
     }
 
-    void process_notification_model::draw_progress_bar(ux_window & win, int bar_width)
+    void progress_bar::draw(ux_window & win, int bar_width, int progress)
     {
-        auto progress = update_manager->get_progress();
-
         auto now = system_clock::now();
         auto ellapsed = duration_cast<milliseconds>(now - last_progress_time).count() / 1000.f;
 
@@ -160,6 +158,12 @@ namespace rs2
         ImGui::SetCursorScreenPos({ float(pos.x), float(pos.y + 25) });
     }
 
+    void process_notification_model::draw_progress_bar(ux_window & win, int bar_width)
+    {
+        auto progress = update_manager->get_progress();
+        _progress_bar.draw(win, bar_width, progress);
+    }
+
     /* Sets color scheme for notifications, must be used with unset_color_scheme to pop all colors in the end
        Parameter t indicates the transparency of the nofication interface */
     void notification_model::set_color_scheme(float t) const
@@ -186,7 +190,7 @@ namespace rs2
         }
     }
 
-    const int notification_model::get_max_lifetime_ms() const
+    int notification_model::get_max_lifetime_ms() const
     {
         return 10000;
     }
@@ -236,7 +240,7 @@ namespace rs2
         // TODO: Make polymorphic
         if (update_state == 2)
         {
-            auto k = duration_cast<milliseconds>(system_clock::now() - last_progress_time).count() / 500.f;
+            auto k = duration_cast<milliseconds>(system_clock::now() - _progress_bar.last_progress_time).count() / 500.f;
             if (k <= 1.f)
             {
                 auto size = 100;
@@ -258,9 +262,52 @@ namespace rs2
         ImGui::SetCursorScreenPos({ float(x + width - 105), float(y + height - 25) });
 
         string id = to_string() << "Dismiss" << "##" << index;
+
+        ImGui::PushStyleColor(ImGuiCol_Text, black);
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, almost_white_bg);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, light_blue);
+        ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, white);
+
+        ImGui::PushFont(win.get_font());
+
+        ImGui::SetNextWindowPos({ float(x + width - 125), float(y + height - 25) });
+        ImGui::SetNextWindowSize({ 120, 70 });
+
+        std::string dismiss_popup = to_string() << "Dismiss Options" << "##" << index;
+        if (ImGui::BeginPopup(dismiss_popup.c_str()))
+        {
+            if (ImGui::Selectable("Just this time"))
+            {
+                dismiss(true);
+            }
+
+            if (ImGui::Selectable("Remind me later"))
+            {
+                delay(7);
+                dismiss(true);
+            }
+
+            if (ImGui::Selectable("Don't show again"))
+            {
+                delay(1000);
+                dismiss(true);
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::PopFont();
+        ImGui::PopStyleColor(4);
+
         if (ImGui::Button(id.c_str(), { 100, 20 }))
         {
-            dismiss(true);
+            if (enable_complex_dismiss)
+                ImGui::OpenPopup(dismiss_popup.c_str());
+            else dismiss(true);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            win.link_hovered();
         }
     }
 
@@ -683,10 +730,21 @@ namespace rs2
     void notifications_model::foreach_log(std::function<void(const std::string& line)> action)
     {
         std::lock_guard<std::recursive_mutex> lock(m);
-        for (auto&& l : log)
+
+        // Process only the messages that are available upon invocation
+        std::string log_entry;
+        for (size_t len = 0; len < incoming_log_queue.size(); len++)
         {
-            action(l);
+            if (incoming_log_queue.try_dequeue(&log_entry))
+                notification_logs.push_back(log_entry);
         }
+
+        // Limit the notification window
+        while (notification_logs.size() > 200)
+            notification_logs.pop_front();
+
+        for (auto&& l : notification_logs)
+            action(l);
 
         auto rc = ImGui::GetCursorPos();
         ImGui::SetCursorPos({ rc.x, rc.y + 5 });
@@ -698,12 +756,13 @@ namespace rs2
         }
     }
 
+    // Callback function must not include mutex
     void notifications_model::add_log(std::string line)
     {
-        std::lock_guard<std::recursive_mutex> lock(m);
         if (!line.size()) return;
+
         if (line[line.size() - 1] != '\n') line += "\n";
-        log.push_back(line);
+        incoming_log_queue.enqueue(std::move(line));
         new_log = true;
     }
 
@@ -714,7 +773,7 @@ namespace rs2
         enable_dismiss = true;
         update_state = 2;
         //pinned = true;
-        last_progress_time = system_clock::now();
+        _progress_bar.last_progress_time = system_clock::now();
     } 
 
     void version_upgrade_model::set_color_scheme(float t) const
@@ -729,7 +788,7 @@ namespace rs2
     {
         if (_first)
         {
-            last_progress_time = system_clock::now();
+            _progress_bar.last_progress_time = system_clock::now();
             _first = false;
         }
 
@@ -813,14 +872,9 @@ namespace rs2
             throw std::runtime_error("Invoke operation failed!");
     }
 
-    void process_manager::start(std::shared_ptr<notification_model> n)
+    void process_manager::start(invoker invoke)
     {
-        auto cleanup = [n]() {
-            //n->dismiss(false);
-        };
-
-        auto invoke = [n](std::function<void()> action) {
-            n->invoke(action);
+        auto cleanup = [invoke]() {
         };
 
         log(to_string() << "Started " << _process_name << " process");
@@ -920,7 +974,7 @@ namespace rs2
             {
                 update_state = STATE_COMPLETE;
                 pinned = false;
-                last_progress_time = last_interacted = system_clock::now();
+                _progress_bar.last_progress_time = last_interacted = system_clock::now();
             }
 
             if (!expanded)
@@ -1035,5 +1089,25 @@ namespace rs2
         {
             ImGui::SetTooltip("%s", "Enables metadata on connected devices (you may be prompted for administrator privileges)");
         }
+    }
+
+    bool notification_model::is_delayed() const
+    {
+        // Make sure we don't spam calibration remainders too often:
+        time_t rawtime;
+        time(&rawtime);
+        std::string str = to_string() << "notifications." << delay_id << ".next";
+        long long next_time = config_file::instance().get_or_default(str.c_str(), (long long)0);
+
+        return rawtime < next_time;
+    }
+
+    void notification_model::delay(int days)
+    {
+        // Make sure we don't spam calibration remainders too often:
+        time_t rawtime;
+        time(&rawtime);
+        std::string str = to_string() << "notifications." << delay_id << ".next";
+        config_file::instance().set(str.c_str(), (long long)(rawtime + days * 60 * 60 * 24));
     }
 }
