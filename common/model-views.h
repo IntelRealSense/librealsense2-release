@@ -19,12 +19,13 @@
 #include <array>
 #include <unordered_map>
 
-#include "imgui-fonts-karla.hpp"
-#include "imgui-fonts-fontawesome.hpp"
 #include "../third-party/json.hpp"
+#include "objects-in-frame.h"
+#include "processing-block-model.h"
 
 #include "realsense-ui-advanced-mode.h"
 #include "fw-update-helper.h"
+#include "updates-model.h"
 
 ImVec4 from_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a, bool consistent_color = false);
 ImVec4 operator+(const ImVec4& c, float v);
@@ -57,6 +58,15 @@ static const ImVec4 green = from_rgba(0x20, 0xe0, 0x20, 0xff, true);
 static const ImVec4 dark_sensor_bg = from_rgba(0x1b, 0x21, 0x25, 170);
 static const ImVec4 red = from_rgba(233, 0, 0, 255, true);
 static const ImVec4 greenish = from_rgba(33, 104, 0, 255);
+
+inline ImVec4 operator*(const ImVec4& color, float t)
+{
+    return ImVec4(color.x * t, color.y * t, color.z * t, color.w * t);
+}
+inline ImVec4 operator+(const ImVec4& a, const ImVec4& b)
+{
+    return ImVec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
+}
 
 // Helper class that lets smoothly animate between its values
 template<class T>
@@ -155,11 +165,13 @@ namespace rs2
         namespace viewer
         {
             static const char* is_3d_view          { "viewer_model.is_3d_view" };
+            static const char* ground_truth_r      { "viewer_model.ground_truth_r" };
             static const char* continue_with_ui_not_aligned { "viewer_model.continue_with_ui_not_aligned" };
             static const char* continue_with_current_fw{ "viewer_model.continue_with_current_fw" };
             static const char* settings_tab        { "viewer_model.settings_tab" };
             static const char* sdk_version         { "viewer_model.sdk_version" };
             static const char* last_calib_notice   { "viewer_model.last_calib_notice" };
+            static const char* is_measuring        { "viewer_model.is_measuring" };
 
             static const char* log_to_console      { "viewer_model.log_to_console" };
             static const char* log_to_file         { "viewer_model.log_to_file" };
@@ -169,6 +181,9 @@ namespace rs2
             static const char* show_map_ruler      { "viewer_model.show_map_ruler" };
             static const char* show_stream_details { "viewer_model.show_stream_details" };
             static const char* metric_system       { "viewer_model.metric_system" };
+            static const char* shading_mode        { "viewer_model.shading_mode" };
+
+            static const char* last_ip             { "viewer_model.last_ip" };
         }
         namespace window
         {
@@ -190,6 +205,8 @@ namespace rs2
             static const char* show_fps            { "performance.show_fps" };
             static const char* vsync               { "performance.vsync" };
             static const char* font_oversample     { "performance.font_oversample.v2" };
+            static const char* show_skybox         { "performance.show_skybox" };
+            static const char* occlusion_invalidation { "performance.occlusion_invalidation" };
         }
         namespace ply
         {
@@ -216,7 +233,6 @@ namespace rs2
         static const textual_icon camera                   { u8"\uf030" };
         static const textual_icon video_camera             { u8"\uf03d" };
         static const textual_icon edit                     { u8"\uf044" };
-        static const textual_icon check_square_o           { u8"\uf046" };
         static const textual_icon step_backward            { u8"\uf048" };
         static const textual_icon play                     { u8"\uf04b" };
         static const textual_icon pause                    { u8"\uf04c" };
@@ -239,6 +255,7 @@ namespace rs2
         static const textual_icon caret_down               { u8"\uf0d7" };
         static const textual_icon repeat                   { u8"\uf0e2" };
         static const textual_icon circle                   { u8"\uf111" };
+        static const textual_icon check_square_o           { u8"\uf14a" };
         static const textual_icon cubes                    { u8"\uf1b3" };
         static const textual_icon toggle_off               { u8"\uf204" };
         static const textual_icon toggle_on                { u8"\uf205" };
@@ -256,6 +273,8 @@ namespace rs2
         static const textual_icon metadata                 { u8"\uF0AE" };
         static const textual_icon check                    { u8"\uF00C" };
         static const textual_icon mail                     { u8"\uF01C" };
+        static const textual_icon cube                     { u8"\uf1b2" };
+        static const textual_icon measure                  { u8"\uf545" };
     }
 
     class subdevice_model;
@@ -378,47 +397,6 @@ namespace rs2
 
     void save_processing_block_to_config_file(const char* name, 
         std::shared_ptr<rs2::processing_block> pb, bool enable = true);
-
-    class processing_block_model
-    {
-    public:
-        processing_block_model(subdevice_model* owner,
-            const std::string& name,
-            std::shared_ptr<rs2::filter> block,
-            std::function<rs2::frame(rs2::frame)> invoker,
-            std::string& error_message,
-            bool enabled = true);
-
-        const std::string& get_name() const { return _name; }
-
-        option_model& get_option(rs2_option opt);
-
-        rs2::frame invoke(rs2::frame f) const { return _invoker(f); }
-
-        void save_to_config_file();
-
-        std::vector<rs2_option> get_option_list()
-        {
-            return _block->get_supported_options();
-        }
-
-        void populate_options(const std::string& opt_base_label,
-            subdevice_model* model,
-            bool* options_invalidated,
-            std::string& error_message);
-
-        std::shared_ptr<rs2::filter> get_block() { return _block; }
-
-        bool enabled = true;
-        bool visible = true;
-    private:
-        std::shared_ptr<rs2::filter> _block;
-        std::map<int, option_model> options_metadata;
-        std::string _name;
-        std::string _full_name;
-        std::function<rs2::frame(rs2::frame)> _invoker;
-        subdevice_model* _owner;
-    };
 
     class syncer_model
     {
@@ -597,7 +575,7 @@ namespace rs2
             bool* options_invalidated,
             std::string& error_message);
 
-        subdevice_model(device& dev, std::shared_ptr<sensor> s, std::string& error_message, viewer_model& viewer);
+        subdevice_model(device& dev, std::shared_ptr<sensor> s, std::shared_ptr< atomic_objects_in_frame > objects, std::string& error_message, viewer_model& viewer);
         ~subdevice_model();
 
         bool is_there_common_fps() ;
@@ -665,6 +643,7 @@ namespace rs2
         std::shared_ptr<sensor> s;
         device dev;
         tm2_model tm2;
+        std::shared_ptr< atomic_objects_in_frame > detected_objects;
 
         std::map<int, option_model> options_metadata;
         std::vector<std::string> resolutions;
@@ -724,6 +703,7 @@ namespace rs2
 
     void outline_rect(const rect& r);
     void draw_rect(const rect& r, int line_width = 1);
+
 
     class stream_model
     {
@@ -814,6 +794,10 @@ namespace rs2
         void begin_update(std::vector<uint8_t> data,
             viewer_model& viewer, std::string& error_message);
         void begin_update_unsigned(viewer_model& viewer, std::string& error_message);
+        void check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates);
+
+
+        std::shared_ptr< atomic_objects_in_frame > get_detected_objects() const { return _detected_objects; }
 
         std::vector<std::shared_ptr<subdevice_model>> subdevices;
         std::shared_ptr<syncer_model> syncer;
@@ -864,10 +848,14 @@ namespace rs2
         void load_viewer_configurations(const std::string& json_str);
         void save_viewer_configurations(std::ofstream& outfile, nlohmann::json& j);
 
+
         std::shared_ptr<recorder> _recorder;
         std::vector<std::shared_ptr<subdevice_model>> live_subdevices;
         periodic_timer      _update_readonly_options_timer;
         bool pause_required = false;
+        std::shared_ptr< atomic_objects_in_frame > _detected_objects;
+        std::shared_ptr<updates_model> _updates;
+        sw_update::dev_updates_profile::update_profile _updates_profile;
     };
 
     class viewer_model;

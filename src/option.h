@@ -213,7 +213,7 @@ namespace librealsense
         float query() const override { return _value; }
         bool is_enabled() const override { return true; }
         // TODO: expose this outwards
-        const char* get_description() const override { return "A simple custom option for a processing block"; }
+        const char* get_description() const override { return "A simple custom option for a processing block or software device"; }
     protected:
         float _value;
     };
@@ -228,10 +228,27 @@ namespace librealsense
         const char* get_description() const override { return option_description::get_description(); }
     };
 
+    class readonly_float_option : public float_option
+    {
+    public:
+        readonly_float_option(const option_range& range)
+            : float_option(range) {}
+
+        bool is_read_only() const override { return true; }
+        const char* get_description() const override { return "A simple read-only custom option for a software device"; }
+        void set(float) override
+        {
+            // TODO: Use get_description() to give a more useful error message when user-supplied descriptions are implemented
+            throw not_implemented_exception("This option is read-only!");
+        }
+
+        void update(float val) { float_option::set(val); }
+    };
+
     class LRS_EXTENSION_API bool_option : public float_option
     {
     public:
-        bool_option() : float_option(option_range{ 0, 1, 1, 1 }) {}
+        bool_option( bool default_on = true ) : float_option(option_range{ 0, 1, 1, default_on ? 1.f : 0.f }) {}
         bool is_true() { return (_value > _opt_range.min); }
         // TODO: expose this outwards
         const char* get_description() const override { return "A simple custom option for a processing block"; }
