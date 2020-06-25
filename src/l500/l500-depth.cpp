@@ -266,12 +266,25 @@ namespace librealsense
 
     rs2_sensor_mode get_resolution_from_width_height(int width, int height)
     {
-        if ((width == 640 && height == 480) || (height == 640 && width == 480))
+        if ((width == 640 && height == 480) || (width == 480  && height == 640))
             return RS2_SENSOR_MODE_VGA;
-        else if ((width == 1024 && height == 768) || (height == 768 && width == 1024))
+        else if ((width == 1024 && height == 768) || (width == 768 && height == 1024))
             return RS2_SENSOR_MODE_XGA;
         else
             throw std::runtime_error(to_string() << "Invalid resolution " << width << "x" << height);
+    }
+
+    bool stream_profiles_correspond(stream_profile_interface* l, stream_profile_interface* r)
+    {
+        auto vl = dynamic_cast<video_stream_profile_interface*>(l);
+        auto vr = dynamic_cast<video_stream_profile_interface*>(r);
+
+        if (!vl || !vr)
+            return false;
+
+        return  l->get_framerate() == r->get_framerate() &&
+            vl->get_width() == vr->get_width() &&
+            vl->get_height() == vr->get_height();
     }
 
     void l500_depth_sensor::open(const stream_profiles& requests)
@@ -303,7 +316,7 @@ namespace librealsense
                     auto corresponding_ir = std::find_if(sp.begin(), sp.end(), [&](std::shared_ptr<stream_profile_interface> sp)
                     {
                         auto vs = dynamic_cast<video_stream_profile*>(sp.get());
-                        return sp->get_stream_type() == RS2_STREAM_INFRARED && frame_validator::stream_profiles_correspond(sp.get(), user_request_profile);
+                        return sp->get_stream_type() == RS2_STREAM_INFRARED && stream_profiles_correspond(sp.get(), user_request_profile);
                     });
 
                     if (corresponding_ir == sp.end())
@@ -320,6 +333,32 @@ namespace librealsense
 
             auto dp = std::find_if(requests.begin(), requests.end(), [](std::shared_ptr<stream_profile_interface> sp)
             {return sp->get_stream_type() == RS2_STREAM_DEPTH;});
+
+            if( supports_option( RS2_OPTION_VISUAL_PRESET ) )
+            {
+                // We want to set the default preset to Max Range (make sure laser power is 100%)
+                // NOTE: This becomes the "default", meaning that in the viewer the user will see "default"
+                // (with power at 88, set by FW!) and, when the sensor is turned on, it will change to Max
+                // Power (with power at 100, again by FW). It's weird but acceptable.
+                // (see RS5-7780)
+                try
+                {
+                    auto&& preset_option = get_option( RS2_OPTION_VISUAL_PRESET );
+                    if( preset_option.query() == RS2_L500_VISUAL_PRESET_DEFAULT )
+                    {
+                        LOG_INFO( "Switching visual preset to MAX_RANGE by default" );
+                        preset_option.set( RS2_L500_VISUAL_PRESET_MAX_RANGE );
+                    }
+                }
+                catch( std::exception const & e )
+                {
+                    LOG_ERROR( "Caught exception while trying to set Max Range preset: " << e.what() );
+                }
+                catch( ... )
+                {
+                    LOG_ERROR( "Caught unknown exception while trying to set Max Range preset!" );
+                }
+            }
 
             if (dp != requests.end() && supports_option(RS2_OPTION_SENSOR_MODE))
             {

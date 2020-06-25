@@ -377,8 +377,9 @@ namespace librealsense
         _range = [this]()
         {
             return option_range{ ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT,
-                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_MAX - 1,
-                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT, 1 };
+                                 2,
+                                 1, 
+                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT};
         };
     }
 
@@ -402,6 +403,54 @@ namespace librealsense
     }
 
     option_range external_sync_mode::get_range() const
+    {
+        return *_range;
+    }
+
+    external_sync_mode2::external_sync_mode2(hw_monitor& hwm, sensor_base* ep)
+        : _hwm(hwm), _sensor(ep)
+    {
+        _range = [this]()
+        {
+            return option_range{ ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT,
+                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_MAX,
+                                 1,
+                                 ds::inter_cam_sync_mode::INTERCAM_SYNC_DEFAULT };
+        };
+    }
+
+    void external_sync_mode2::set(float value)
+    {
+        if (_sensor->is_streaming())
+            throw std::runtime_error("Cannot change Inter-camera HW synchronization mode while streaming!");
+
+        command cmd(ds::SET_CAM_SYNC);
+        if (value < 4)
+            cmd.param1 = static_cast<int>(value);
+        else
+        {
+            cmd.param1 = 4;
+            cmd.param1 |= (static_cast<int>(value - 3)) << 8;
+        }
+
+        _hwm.send(cmd);
+        _record_action(*this);
+    }
+
+    float external_sync_mode2::query() const
+    {
+        command cmd(ds::GET_CAM_SYNC);
+        auto res = _hwm.send(cmd);
+        if (res.empty())
+            throw invalid_value_exception("external_sync_mode::query result is empty!");
+
+        if (res.front() < 4)
+            return (res.front());
+        else
+            return (static_cast<float>(res[1]) + 3.0f);
+    }
+
+    option_range external_sync_mode2::get_range() const
     {
         return *_range;
     }
@@ -472,5 +521,40 @@ namespace librealsense
 
         static std::vector<uint8_t> alt_emitter_name(ds::alternating_emitter_pattern.begin()+2,ds::alternating_emitter_pattern.begin()+22);
         return (alt_emitter_name == res);
+    }
+
+    emitter_always_on_option::emitter_always_on_option(hw_monitor& hwm, sensor_base* ep)
+        : _hwm(hwm), _sensor(ep)
+    {
+        _range = [this]()
+        {
+            return option_range{ 0, 1, 1, 0 };
+        };
+    }
+
+    void emitter_always_on_option::set(float value)
+    {
+        command cmd(ds::LASERONCONST);
+        cmd.param1 = static_cast<int>(value);
+
+        _hwm.send(cmd);
+        _record_action(*this);
+    }
+
+    float emitter_always_on_option::query() const
+    {
+        command cmd(ds::LASERONCONST);
+        cmd.param1 = 2;
+
+        auto res = _hwm.send(cmd);
+        if (res.empty())
+            throw invalid_value_exception("emitter_always_on_option::query result is empty!");
+
+        return (res.front());
+    }
+
+    option_range emitter_always_on_option::get_range() const
+    {
+        return *_range;
     }
 }
