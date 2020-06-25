@@ -33,6 +33,7 @@ typedef enum rs2_camera_info {
     RS2_CAMERA_INFO_PRODUCT_LINE                   , /**< Device product line D400/SR300/L500/T200 */
     RS2_CAMERA_INFO_ASIC_SERIAL_NUMBER             , /**< ASIC serial number */
     RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID             , /**< Firmware update ID */
+    RS2_CAMERA_INFO_IP_ADDRESS                     , /**< IP address for remote camera. */
     RS2_CAMERA_INFO_COUNT                            /**< Number of enumeration values. Not a valid input: intended to be used in for-loops. */
 } rs2_camera_info;
 const char* rs2_camera_info_to_string(rs2_camera_info info);
@@ -317,11 +318,19 @@ const char* rs2_get_notification_serialized_data(rs2_notification* notification,
 
 /**
 * check if physical subdevice is supported
-* \param[in] device  input RealSense device
+* \param[in] sensor  input RealSense subdevice
 * \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
 * \return            list of stream profiles that given subdevice can provide, should be released by rs2_delete_profiles_list
 */
-rs2_stream_profile_list* rs2_get_stream_profiles(rs2_sensor* device, rs2_error** error);
+rs2_stream_profile_list* rs2_get_stream_profiles(rs2_sensor* sensor, rs2_error** error);
+
+/**
+* check how subdevice is streaming
+* \param[in] sensor  input RealSense subdevice
+* \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+* \return            list of stream profiles that given subdevice is currently streaming, should be released by rs2_delete_profiles_list
+*/
+rs2_stream_profile_list* rs2_get_active_streams(rs2_sensor* sensor, rs2_error** error);
 
 /**
 * Get pointer to specific stream profile

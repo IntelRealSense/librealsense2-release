@@ -327,6 +327,8 @@ namespace librealsense
             CASE(INVALIDATION_BYPASS)
             CASE(AMBIENT_LIGHT)
             CASE(SENSOR_MODE)
+            CASE(EMITTER_ALWAYS_ON)
+            CASE(THERMAL_COMPENSATION)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -405,6 +407,7 @@ namespace librealsense
             CASE(USB_TYPE_DESCRIPTOR)
             CASE(ASIC_SERIAL_NUMBER)
             CASE(FIRMWARE_UPDATE_ID)
+            CASE(IP_ADDRESS)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
