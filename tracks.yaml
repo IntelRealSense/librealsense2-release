@@ -48,4 +48,4 @@ tracks:
     ros_distro: melodic
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.35.2
+    version: 2.36.0
