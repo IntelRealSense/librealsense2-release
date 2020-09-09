@@ -19,6 +19,7 @@
 #include "l500-options.h"
 #include "ac-trigger.h"
 #include "algo/depth-to-rgb-calibration/debug.h"
+#include "algo/depth-to-rgb-calibration/utils.h"  // validate_dsm_params
 
 
 #define MM_TO_METER 1/1000
@@ -83,6 +84,7 @@ namespace librealsense
 
         register_stream_to_extrinsic_group(*_depth_stream, 0);
         register_stream_to_extrinsic_group(*_ir_stream, 0);
+        register_stream_to_extrinsic_group(*_confidence_stream, 0);
 
         auto error_control = std::unique_ptr<uvc_xu_option<int>>(new uvc_xu_option<int>(raw_depth_sensor, ivcam2::depth_xu, L500_ERROR_REPORTING, "Error reporting"));
 
@@ -234,17 +236,16 @@ namespace librealsense
 
     void l500_depth_sensor::override_dsm_params( rs2_dsm_params const & dsm_params )
     {
-        /*  Considerable values for DSM correction:
-            - h/vFactor: 0.98-1.02, representing up to 2% change in FOV.
-            - h/vOffset:
-                - Under AOT model: (-2)-2, representing up to 2deg FOV tilt
-                - Under TOA model: (-125)-125, representing up to approximately
-                  2deg FOV tilt
-            These values are extreme. For more reasonable values take 0.99-1.01
-            for h/vFactor and divide the suggested h/vOffset range by 10.
-        */
-        if( dsm_params.model != RS2_DSM_CORRECTION_AOT )
-            throw invalid_value_exception( "DSM non-AoT (1) mode is currently unsupported" );
+        try
+        {
+            algo::depth_to_rgb_calibration::validate_dsm_params( dsm_params );  // throws!
+        }
+        catch( invalid_value_exception const & e )
+        {
+            if( ! getenv( "RS2_AC_IGNORE_LIMITERS" ))
+                throw;
+            AC_LOG( ERROR, "Ignoring (RS2_AC_IGNORE_LIMITERS) " << e.what() );
+        }
 
         ac_depth_results table( dsm_params );
         // table.params.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
@@ -252,18 +253,6 @@ namespace librealsense
         time( &t );                                       // local time
         table.params.timestamp = mktime( gmtime( &t ) );  // UTC time
         table.params.version = ac_depth_results::this_version;
-
-        // The temperature may depend on streaming?
-        auto res = _owner->_hw_monitor->send( command{TEMPERATURES_GET} );
-        if( res.size() < sizeof( temperatures ) )  // New temperatures may get added by FW...
-        {
-            AC_LOG( ERROR, "Failed to get temperatures; result size= " << res.size() << "; expecting at least " << sizeof( temperatures ) );
-        }
-        else
-        {
-            auto const & ts = *( reinterpret_cast<temperatures *>( res.data() ) );
-            table.params.temp_x2 = byte( ts.LDD_temperature * 2 );
-        }
 
         AC_LOG( INFO, "Overriding DSM : " << table.params );
         ivcam2::write_fw_table( *_owner->_hw_monitor, ac_depth_results::table_id, table );
@@ -370,6 +359,7 @@ namespace librealsense
 
     void l500_depth_sensor::start(frame_callback_ptr callback)
     {
+        // The delay is here as a work around to a firmware bug [RS5-5453]
         _action_delayer.do_after_delay( [&]() {
             if( _depth_invalidation_enabled )
                 synthetic_sensor::start(
@@ -386,6 +376,7 @@ namespace librealsense
 
     void l500_depth_sensor::stop()
     {
+    // The delay is here as a work around to a firmware bug [RS5-5453]
         _action_delayer.do_after_delay([&]() {
             synthetic_sensor::stop();
             _depth_invalidation_option->set_streaming(false);
@@ -483,47 +474,41 @@ namespace librealsense
             _user_requests = requests;
             _depth_invalidation_option->set_streaming(true);
 
-            if (_depth_invalidation_enabled)
+            auto is_ir_requested
+                = std::find_if( requests.begin(),
+                                requests.end(),
+                                []( std::shared_ptr< stream_profile_interface > const & sp ) {
+                                    return sp->get_stream_type() == RS2_STREAM_INFRARED;
+                                } )
+               != requests.end();
+
+            _validator_requests = requests;
+
+            //enable ir if user didn't asked ir in order to validate the ir frame
+            if (!is_ir_requested)
             {
-                auto is_ir_requested
-                    = std::find_if( requests.begin(),
-                                    requests.end(),
-                                    []( std::shared_ptr< stream_profile_interface > const & sp ) {
-                                        return sp->get_stream_type() == RS2_STREAM_INFRARED;
-                                    } )
-                   != requests.end();
+                auto user_request = std::find_if(requests.begin(), requests.end(), [](std::shared_ptr<stream_profile_interface> sp)
+                {return sp->get_stream_type() != RS2_STREAM_INFRARED;});
 
-                _validator_requests = requests;
+                if (user_request == requests.end())
+                    throw std::runtime_error(to_string() << "input stream_profiles is invalid");
 
-                //enable ir if user didn't asked ir in order to validate the ir frame
-                if (!is_ir_requested)
+                auto user_request_profile = dynamic_cast<video_stream_profile*>(user_request->get());
+
+                auto sp = synthetic_sensor::get_stream_profiles();
+
+                auto corresponding_ir = std::find_if(sp.begin(), sp.end(), [&](std::shared_ptr<stream_profile_interface> sp)
                 {
-                    auto user_request = std::find_if(requests.begin(), requests.end(), [](std::shared_ptr<stream_profile_interface> sp)
-                    {return sp->get_stream_type() != RS2_STREAM_INFRARED;});
+                    auto vs = dynamic_cast<video_stream_profile*>(sp.get());
+                    return sp->get_stream_type() == RS2_STREAM_INFRARED && stream_profiles_correspond(sp.get(), user_request_profile);
+                });
 
-                    if (user_request == requests.end())
-                        throw std::runtime_error(to_string() << "input stream_profiles is invalid");
+                if (corresponding_ir == sp.end())
+                    throw std::runtime_error(to_string() << "can't find ir stream corresponding to user request");
 
-                    auto user_request_profile = dynamic_cast<video_stream_profile*>(user_request->get());
-
-                    auto sp = synthetic_sensor::get_stream_profiles();
-
-                    auto corresponding_ir = std::find_if(sp.begin(), sp.end(), [&](std::shared_ptr<stream_profile_interface> sp)
-                    {
-                        auto vs = dynamic_cast<video_stream_profile*>(sp.get());
-                        return sp->get_stream_type() == RS2_STREAM_INFRARED && stream_profiles_correspond(sp.get(), user_request_profile);
-                    });
-
-                    if (corresponding_ir == sp.end())
-                        throw std::runtime_error(to_string() << "can't find ir stream corresponding to user request");
-
-                    _validator_requests.push_back(*corresponding_ir);
-                }
+                _validator_requests.push_back(*corresponding_ir);
             }
-            else
-            {
-                _validator_requests = requests;
-            }
+
 
             auto dp = std::find_if( requests.begin(),
                                     requests.end(),
