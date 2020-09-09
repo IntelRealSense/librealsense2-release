@@ -4,19 +4,12 @@
 //#cmake:add-file ../../../src/algo/depth-to-rgb-calibration/*.cpp
 
 
-#ifndef BUILD_SHARED_LIBS
-#include <easylogging++.h>
-INITIALIZE_EASYLOGGINGPP
-#endif
-
-
 // We have our own main
 #define NO_CATCH_CONFIG_MAIN
 //#define CATCH_CONFIG_RUNNER
 
+#define DISABLE_LOG_TO_STDOUT
 #include "d2rgb-common.h"
-
-//INITIALIZE_EASYLOGGINGPP
 
 
 template< typename T >
@@ -65,9 +58,85 @@ struct old_algo_calib
     }
 };
 
+
+class custom_ac_logger : public ac_logger
+{
+    typedef ac_logger super;
+
+    std::string _codes;
+
+public:
+    custom_ac_logger() {}
+
+    std::string const & get_codes() const { return _codes; }
+    void reset() { _codes.clear(); }
+
+protected:
+    void on_log( char severity, char const * message ) override
+    {
+        super::on_log( severity, message );
+
+        // parse it for keyword
+        auto cch = strlen( message );
+        if( cch < 4 || message[cch - 1] != ']' )
+            return;
+        char const * end = message + cch - 1;
+        char const * start = end - 1;
+        while( *start != '[' )
+        {
+            if( *start == ' ' )
+                return;
+            if( --start == message )
+                return;
+        }
+        if( start[-1] != ' ' )
+            return;
+        // parse it for parameters
+        char const * param = message;
+        std::string values;
+        while( param < start )
+        {
+            if( *param == '{'  &&  ++param < start )
+            {
+                char const * param_end = param;
+                while( *param_end != '}'  &&  param_end < start )
+                    ++param_end;
+                if( param_end == start || param_end - param < 1 )
+                    break;
+                char const * value = param_end + 1;
+                char const * value_end = value;
+                while( *value_end != ' ' )
+                    ++value_end;
+                if( value_end == value )
+                    break;
+                if( value_end - value > 1  &&  strchr( ".;", value_end[-1] ))
+                    --value_end;
+                std::string param_name( param, param_end - param );
+                std::string param_value( value, value_end - value );
+                if( ! values.empty() )
+                    values += ' ';
+                values += param_name;
+                values += '=';
+                values += param_value;
+                param = value_end;
+            }
+            ++param;
+        }
+        std::string code( start + 1, end - start - 1 );
+        if( ! values.empty() )
+            code += '[' + values + ']';
+        if( ! _codes.empty() )
+            _codes += ' ';
+        _codes += code;
+    }
+};
+
 int main( int argc, char * argv[] )
 {
+    custom_ac_logger logger;
+
     bool ok = true;
+    bool debug_mode = false;
     // Each of the arguments is the path to a directory to simulate
     // We skip argv[0] which is the path to the executable
     // We don't complain if no arguments -- that's how we'll run as part of unit-testing
@@ -80,7 +149,12 @@ int main( int argc, char * argv[] )
             {
                 // The build number is only available within Jenkins and so we have to hard-
                 // code it ><
-                std::cout << RS2_API_VERSION_STR << ".1973" << std::endl;
+                std::cout << RS2_API_VERSION_STR << ".2158" << std::endl;
+                continue;
+            }
+            if( ! strcmp( dir, "--debug" ) || ! strcmp( dir, "-d" ) )
+            {
+                debug_mode = true;
                 continue;
             }
             std::cout << "Processing: " << dir << " ..." << std::endl;
@@ -109,35 +183,86 @@ int main( int argc, char * argv[] )
             read_binary_file( dir, "cal.registers", &camera.cal_regs );
             read_binary_file( dir, "dsm.params", &camera.dsm_params );
 
-            algo::optimizer cal;
-            init_algo( cal, dir, "\\rgb.raw", "\\rgb_prev.raw", "\\ir.raw", "\\depth.raw", camera );
+            if( camera.cal_regs.EXTLdsmXoffset < 0. || camera.cal_regs.EXTLdsmXoffset > 100000.
+                || camera.cal_regs.EXTLdsmXscale < 0. || camera.cal_regs.EXTLdsmXscale > 100000.
+                || camera.cal_regs.EXTLdsmYoffset < 0 || camera.cal_regs.EXTLdsmYoffset > 100000.
+                || camera.cal_regs.EXTLdsmYscale < 0 || camera.cal_regs.EXTLdsmYscale > 100000. )
+            {
+                throw std::invalid_argument( "cal.registers file is malformed! (hexdump -v -e '4/ \"%f  \"')" );
+            }
 
+            algo::optimizer::settings settings;
+            try
+            {
+                read_binary_file( dir, "settings", &settings );
+            }
+            catch( std::exception const & e )
+            {
+                std::cout << "!! failed: " << e.what() << " -> assuming [MANUAL LONG 9 @40degC]" << std::endl;
+                settings.ambient = RS2_AMBIENT_LIGHT_NO_AMBIENT;
+                settings.hum_temp = 40;
+                settings.is_manual_trigger = true;
+                settings.receiver_gain = 9;
+            }
+
+            algo::optimizer cal( settings, debug_mode );
             std::string status;
 
-            TRACE( "\n___\nis_scene_valid" );
-            if( !cal.is_scene_valid() )
             {
-                TRACE("NOT VALID\n");
-                status += "SCENE_INVALID ";
-            }
+                memory_profiler profiler;
+                init_algo( cal,
+                           dir,
+                           "\\rgb.raw",
+                           "\\rgb_prev.raw",
+                           "\\rgb_last_successful.raw",
+                           "\\ir.raw",
+                           "\\depth.raw",
+                           camera,
+                           &profiler );
 
-            TRACE( "\n___\noptimize" );
-            size_t n_iteration = cal.optimize(
-                []( algo::data_collect const & data )
+                status = logger.get_codes();
+                logger.reset();
+
+                profiler.section( "is_scene_valid" );
+                if( ! cal.is_scene_valid() )
                 {
-                } );
+                    TRACE( "-E- SCENE_INVALID" );
+                    if( ! status.empty() )
+                        status += ' ';
+                    status += "SCENE_INVALID";
+                }
+                profiler.section_end();
 
-            TRACE( "\n___\nis_valid_results" );
-            if( !cal.is_valid_results() )
-            {
-                TRACE("NOT VALID\n");
-                status += "BAD_RESULT";
+                profiler.section( "optimize" );
+                size_t n_iteration = cal.optimize();
+                profiler.section_end();
+
+                std::string results;
+                profiler.section( "is_valid_results" );
+                if( ! cal.is_valid_results() )
+                {
+                    TRACE( "NOT VALID\n" );
+                    results = "BAD_RESULT";
+                }
+                else
+                {
+                    results = "SUCCESSFUL";
+                }
+                profiler.section_end();
+
+                if( ! logger.get_codes().empty() )
+                {
+                    if( ! status.empty() )
+                        status += ' ';
+                    status += logger.get_codes();
+                    logger.reset();
+                }
+                if( ! status.empty() )
+                    status += ' ';
+                status += results;
             }
-            else
-            {
-                status += "SUCCESSFUL";
-            }
-            TRACE( "\n___\nRESULTS:  (" << RS2_API_VERSION_STR << " build 1973)" );
+
+            TRACE( "\n___\nRESULTS:  (" << RS2_API_VERSION_STR << " build 2158)" );
 
             auto intr = cal.get_calibration().get_intrinsics();
             auto extr = cal.get_calibration().get_extrinsics();
@@ -150,6 +275,19 @@ int main( int argc, char * argv[] )
                 << ", " << intr.coeffs[3] << ", " << intr.coeffs[4] << "] ]" );
             AC_LOG( DEBUG, AC_D_PREC << "extr" << (rs2_extrinsics) extr );
             AC_LOG( DEBUG, AC_D_PREC << "dsm" << cal.get_dsm_params() );
+
+            try
+            {
+                algo::validate_dsm_params( cal.get_dsm_params() );
+            }
+            catch( librealsense::invalid_value_exception const & e )
+            {
+                AC_LOG( ERROR, "Exception: " << e.what() );
+                if( ! status.empty() )
+                    status += ' ';
+                status += logger.get_codes();
+                logger.reset();
+            }
 
             TRACE( "\n___\nVS:" );
             AC_LOG( DEBUG, AC_D_PREC << "dsm" << camera.dsm_params );

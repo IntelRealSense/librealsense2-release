@@ -60,6 +60,11 @@ static const double r2d = 180 / pi;
 template<typename T> T deg2rad(T val) { return T(val * d2r); }
 template<typename T> T rad2deg(T val) { return T(val * r2d); }
 
+// global abs() is only defined for int for some GCC impl on Linux, meaning we may
+// get unwanted behavior without any warning whatsoever. Instead, we want to use the
+// C++ version in std!
+using std::abs;
+
 #pragma warning(disable: 4250)
 
 #ifdef ANDROID
@@ -503,9 +508,11 @@ namespace librealsense
     // Enumerated type support //
     /////////////////////////////
 
+// Require the last enumerator value to be in format of RS2_#####_COUNT
 #define RS2_ENUM_HELPERS( TYPE, PREFIX )                                                           \
     RS2_ENUM_HELPERS_CUSTOMIZED( TYPE, 0, RS2_##PREFIX##_COUNT - 1 )
 
+// This macro can be used directly if needed to support enumerators with no RS2_#####_COUNT last value
 #define RS2_ENUM_HELPERS_CUSTOMIZED( TYPE, FIRST, LAST )                                           \
     LRS_EXTENSION_API const char * get_string( TYPE value );                                       \
     inline bool is_valid( TYPE value ) { return value >= FIRST && value <= LAST; }                 \
@@ -518,7 +525,7 @@ namespace librealsense
     }                                                                                              \
     inline bool try_parse( const std::string & str, TYPE & res )                                   \
     {                                                                                              \
-        for( int i = FIRST; i < LAST; i++ )                                                        \
+        for( int i = FIRST; i <= LAST; i++ )                                                       \
         {                                                                                          \
             auto v = static_cast< TYPE >( i );                                                     \
             if( str == get_string( v ) )                                                           \
@@ -549,6 +556,7 @@ namespace librealsense
     RS2_ENUM_HELPERS(rs2_calibration_type, CALIBRATION_TYPE)
     RS2_ENUM_HELPERS_CUSTOMIZED(rs2_calibration_status, RS2_CALIBRATION_STATUS_FIRST, RS2_CALIBRATION_STATUS_LAST )
     RS2_ENUM_HELPERS_CUSTOMIZED(rs2_ambient_light, RS2_AMBIENT_LIGHT_NO_AMBIENT, RS2_AMBIENT_LIGHT_LOW_AMBIENT)
+    RS2_ENUM_HELPERS(rs2_cah_trigger, CAH_TRIGGER)
 
 
     ////////////////////////////////////////////

@@ -3,6 +3,7 @@
 
 #include "optimizer.h"
 #include "cost.h"
+#include "utils.h"
 #include "debug.h"
 
 using namespace librealsense::algo::depth_to_rgb_calibration;
@@ -146,10 +147,11 @@ void optimizer::clip_ac_scaling( rs2_dsm_params_double const & ac_data_in,
                                        / abs( ac_data_new.h_scale - ac_data_in.h_scale )
                                        * _params.max_global_los_scaling_step;
         AC_LOG( DEBUG,
-                "    H scale delta ("
-                    << AC_D_PREC << abs( ac_data_in.h_scale - ac_data_new.h_scale )
-                    << " > max global LoS scaling per step (" << _params.max_global_los_scaling_step
-                    << "); clipping to " << new_h_scale );
+                "    " << AC_D_PREC << "H scale {new}" << ac_data_new.h_scale
+                       << " is not within {step}"
+                       << std::string( to_string() << _params.max_global_los_scaling_step )
+                       << " of {old}" << ac_data_in.h_scale << "; clipping to {final}"
+                       << new_h_scale << " [CLIP-H]" );
         ac_data_new.h_scale = new_h_scale;
     }
     if( abs( ac_data_in.v_scale - ac_data_new.v_scale ) > _params.max_global_los_scaling_step )
@@ -159,10 +161,11 @@ void optimizer::clip_ac_scaling( rs2_dsm_params_double const & ac_data_in,
                                        / abs( ac_data_new.v_scale - ac_data_in.v_scale )
                                        * _params.max_global_los_scaling_step;
         AC_LOG( DEBUG,
-                "    V scale delta ("
-                    << AC_D_PREC << abs( ac_data_in.v_scale - ac_data_new.v_scale )
-                    << " > max global LoS scaling per step (" << _params.max_global_los_scaling_step
-                    << "); clipping to " << new_v_scale );
+                "    " << AC_D_PREC << "V scale {new}" << ac_data_new.v_scale
+                       << " is not within {step}"
+                       << std::string( to_string() << _params.max_global_los_scaling_step )
+                       << " of {old}" << ac_data_in.v_scale << "; clipping to {final}"
+                       << new_v_scale << " [CLIP-V]" );
         ac_data_new.v_scale = new_v_scale;
     }
 }
@@ -324,6 +327,7 @@ bool optimizer::valid_by_svm(svm_model model)
     case gaussian:
         is_valid = svm_rbf_predictor(_extracted_features, _svm_model_gaussian);
         break;
+
     default:
         AC_LOG(DEBUG, "ERROR : Unknown SVM kernel " << model);
         break;
@@ -343,7 +347,6 @@ bool optimizer::is_valid_results()
     }
 
 
-    bool res = true;
     // Clip any (average) movement of pixels if it's too big
     clip_pixel_movement();
 
@@ -352,7 +355,7 @@ bool optimizer::is_valid_results()
     if( _factory_calibration.width  &&  _factory_calibration.height )
     {
         double xy_movement = calc_correction_in_pixels(_final_calibration);
-        AC_LOG( DEBUG, "... average pixel movement from factory calibration= " << xy_movement );
+        AC_LOG( DEBUG, "    average pixel movement from factory calibration= " << xy_movement );
         if( xy_movement > _params.max_xy_movement_from_origin )
         {
             AC_LOG( ERROR, "Calibration has moved too far from the original factory calibration (" << xy_movement << " pixels)" );
@@ -361,7 +364,7 @@ bool optimizer::is_valid_results()
     }
     else
     {
-        AC_LOG( DEBUG, "... no factory calibration available; skipping distance check" );
+        AC_LOG( DEBUG, "    no factory calibration available; skipping distance check" );
     }
 
     /* %% Check and see that the score didn't increased by a lot in one image section and decreased in the others
@@ -379,19 +382,60 @@ bool optimizer::is_valid_results()
         = *std::min_element( _z.cost_diff_per_section.begin(), _z.cost_diff_per_section.end() );
     double max_cost_diff
         = *std::max_element( _z.cost_diff_per_section.begin(), _z.cost_diff_per_section.end() );
-    AC_LOG( DEBUG, "... min cost diff= " << min_cost_diff << "  max= " << max_cost_diff );
-    if( min_cost_diff < 0. )
-    {
-        AC_LOG( ERROR,
-                "Some image sections were hurt by the optimization; invalidating calibration!" );
-        for( size_t x = 0; x < _z.cost_diff_per_section.size(); ++x )
-            AC_LOG( DEBUG,
-                    "... cost diff in section " << x << "= " << _z.cost_diff_per_section[x] );
-        // return false;
-        res = false;
-    }
+    AC_LOG( DEBUG, "    min cost diff= " << min_cost_diff << "  max= " << max_cost_diff );
 
     bool res_svm = valid_by_svm( linear );  //(gaussian);
-    return ( res && res_svm );
+    if( ! res_svm )
+        return false;
+
+#if 0
+    try
+    {
+        validate_dsm_params( get_dsm_params() );
+    }
+    catch( invalid_value_exception const & e )
+    {
+        AC_LOG( ERROR, "Result DSM parameters are invalid: " << e.what() );
+        return false;
+    }
+#endif
+
+    return true;
+}
+
+
+void librealsense::algo::depth_to_rgb_calibration::validate_dsm_params(
+    rs2_dsm_params const & dsm_params )
+{
+    /*  Considerable values for DSM correction:
+        - h/vFactor: 0.98-1.02, representing up to 2% change in FOV.
+        - h/vOffset:
+            - Under AOT model: (-2)-2, representing up to 2deg FOV tilt
+            - Under TOA model: (-125)-125, representing up to approximately
+              2deg FOV tilt
+        These values are extreme. For more reasonable values take 0.99-1.01
+        for h/vFactor and divide the suggested h/vOffset range by 10.
+
+        Update ww30: +/-1.5% limiter both H/V [0.985..1.015] until AC3.
+        Update ww33: vFactor for all 60 cocktail 1500h units is in the range
+                     of 1.000-1.015; changing to [0.995-1.015]
+    */
+    std::string error;
+    
+    if( dsm_params.model != RS2_DSM_CORRECTION_AOT )
+        error += to_string() << " {mode}" << +dsm_params.model << " must be AOT";
+
+    if( dsm_params.h_scale < 0.985 || dsm_params.h_scale > 1.015 )
+        error += to_string() << " {H-scale}" << dsm_params.h_scale << " exceeds 1.5% change";
+    if( dsm_params.v_scale < 0.995 || dsm_params.v_scale > 1.015 )
+        error += to_string() << " {V-scale}" << dsm_params.v_scale << " exceeds [-0.5%-1.5%]";
+
+    if( dsm_params.h_offset < -2. || dsm_params.h_offset > 2. )
+        error += to_string() << " {H-offset}" << dsm_params.h_offset << " is limited to 2 degrees";
+    if( dsm_params.v_offset < -2. || dsm_params.v_offset > 2. )
+        error += to_string() << " {V-offset}" << dsm_params.v_offset << " is limited to 2 degrees";
+
+    if( ! error.empty() )
+        throw invalid_value_exception( "invalid DSM:" + error + " [LIMIT]" );
 }
 
