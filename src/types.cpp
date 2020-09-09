@@ -75,7 +75,7 @@ namespace librealsense
         rs2_exception_type exception_type) noexcept
         : librealsense_exception(msg, exception_type)
     {
-        LOG_WARNING(msg);
+        LOG_DEBUG("recoverable_exception: " << msg);
     }
 
     bool file_exists(const char* filename)
@@ -174,8 +174,9 @@ namespace librealsense
 #define CASE(X) STRCASE(SENSOR_MODE, X)
         switch (value)
         {
-            CASE(XGA)
             CASE(VGA)
+            CASE(XGA)
+            CASE(QVGA)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -186,7 +187,8 @@ namespace librealsense
 #define CASE(X) STRCASE(CALIBRATION, X)
         switch( type )
         {
-            CASE( DEPTH_TO_RGB )
+        CASE( AUTO_DEPTH_TO_RGB )
+        CASE( MANUAL_DEPTH_TO_RGB )
         default: assert( !is_valid( type ) ); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -197,15 +199,17 @@ namespace librealsense
 #define CASE(X) STRCASE(CALIBRATION, X)
         switch( value )
         {
-            CASE( SPECIAL_FRAME )
-            CASE( STARTED )
-            CASE( NOT_NEEDED )
-            CASE( SUCCESSFUL )
-            
-            CASE( FAILED )
-            CASE( SCENE_INVALID )
-            CASE( BAD_RESULT )
-            CASE( RETRY )
+        CASE( TRIGGERED )
+        CASE( SPECIAL_FRAME )
+        CASE( STARTED )
+        CASE( NOT_NEEDED )
+        CASE( SUCCESSFUL )
+        
+        CASE( BAD_CONDITIONS )
+        CASE( FAILED )
+        CASE( SCENE_INVALID )
+        CASE( BAD_RESULT )
+        CASE( RETRY )
         default: assert( !is_valid( value ) ); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -219,6 +223,19 @@ namespace librealsense
             CASE(NO_AMBIENT)
             CASE(LOW_AMBIENT)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+
+    const char* get_string( rs2_cah_trigger value )
+    {
+#define CASE(X) STRCASE(CAH_TRIGGER, X)
+        switch( value )
+        {
+        CASE( MANUAL )
+        CASE( NOW )
+        CASE( AUTO )
+        default: assert( !is_valid( value ) ); return UNKNOWN_VALUE;
         }
 #undef CASE
     }

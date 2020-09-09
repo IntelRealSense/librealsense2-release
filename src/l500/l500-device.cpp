@@ -210,10 +210,10 @@ namespace librealsense
         is_zo_enabled_opt->set(false);
         depth_sensor.register_option(RS2_OPTION_ZERO_ORDER_ENABLED, is_zo_enabled_opt);
 
-        if( _fw_version >= firmware_version( "1.3.12.0" ) )
+        if( _fw_version >= firmware_version( "1.5.0.0" ) )
         {
             // TODO may not need auto-cal if there's no color sensor, like on the rs500...
-            _autocal = std::make_shared< ac_trigger >( *this, *_hw_monitor );
+            _autocal = std::make_shared< ac_trigger >( *this, _hw_monitor );
 
             // Have the auto-calibration mechanism notify us when calibration has finished
             _autocal->register_callback(
@@ -221,11 +221,13 @@ namespace librealsense
                 {
                     if( status == RS2_CALIBRATION_SUCCESSFUL )
                     {
+                        // We override the DSM params first, because it can throw if the parameters
+                        // are exceeding spec! This may throw!!
+                        get_depth_sensor().override_dsm_params( _autocal->get_dsm_params() );
+                     
                         auto & color_sensor = *get_color_sensor();
                         color_sensor.override_intrinsics( _autocal->get_intrinsics() );
                         color_sensor.override_extrinsics( _autocal->get_extrinsics() );
-
-                        get_depth_sensor().override_dsm_params( _autocal->get_dsm_params() );
                     }
                     notify_of_calibration_change( status );
                 } );
@@ -375,9 +377,19 @@ namespace librealsense
 
     void l500_device::trigger_device_calibration( rs2_calibration_type type )
     {
-        if( type != RS2_CALIBRATION_DEPTH_TO_RGB )
+        ac_trigger::calibration_type calibration_type;
+        switch( type )
+        {
+        case RS2_CALIBRATION_AUTO_DEPTH_TO_RGB:
+            calibration_type = ac_trigger::calibration_type::AUTO;
+            break;
+        case RS2_CALIBRATION_MANUAL_DEPTH_TO_RGB:
+            calibration_type = ac_trigger::calibration_type::MANUAL;
+            break;
+        default:
             throw not_implemented_exception(
                 to_string() << "unsupported calibration type (" << type << ")" );
+        }
 
         if( !_autocal )
             throw not_implemented_exception(
@@ -388,7 +400,7 @@ namespace librealsense
             throw wrong_api_call_sequence_exception( "Camera Accuracy Health is already active" );
 
         AC_LOG( INFO, "Camera Accuracy Health has been manually triggered" );
-        _autocal->trigger_calibration();
+        _autocal->trigger_calibration( calibration_type );
     }
 
     void l500_device::force_hardware_reset() const
@@ -607,6 +619,54 @@ namespace librealsense
     command l500_device::get_flash_logs_command() const
     {
         return command{ ivcam2::FRB, 0x0011E000, 0x3f8 };
+    }
+
+    static void log_FW_response_first_byte(hw_monitor& hwm, const std::string& command_name, const command &cmd, size_t expected_size)
+    {
+        auto res = hwm.send(cmd);
+        if (res.size() < expected_size)
+        {
+            throw invalid_value_exception(to_string()
+                << command_name + " FW command failed: size expected: "
+                << expected_size << " , size received: " << res.size());
+        }
+
+        LOG_INFO(command_name << ": " << static_cast<int>(res[0]));
+    }
+
+    std::vector< uint8_t > l500_device::send_receive_raw_data(const std::vector< uint8_t > & input)
+    {
+        std::string command_str(input.begin(), input.end());
+
+        if (command_str == "GET-NEST")
+        {
+            // Handle extended temperature command
+            auto nest_response = _hw_monitor->send(command{ ivcam2::TEMPERATURES_GET });
+            if (nest_response.size() < sizeof(extended_temperatures))
+            {
+                throw invalid_value_exception(to_string() <<
+                    "Extended temperatures get FW command failed, size expected: " << sizeof(extended_temperatures )
+                    << " , size received: " << nest_response.size() );
+            }
+
+            auto const & ext_temp
+                = *(reinterpret_cast<extended_temperatures *>(nest_response.data()));
+            LOG_INFO("Nest AVG: " << ext_temp.nest_avg);
+
+            // Handle other commands (all results log the first byte)
+            log_FW_response_first_byte(*_hw_monitor, "Gain trim",
+                command(ivcam2::IRB, 0x6C, 0x2, 0x1),
+                sizeof(uint8_t));
+            log_FW_response_first_byte(*_hw_monitor, "IPF gain",
+                command(ivcam2::MRD, 0xA003007C, 0xA0030080),
+                sizeof(uint32_t));
+            log_FW_response_first_byte(*_hw_monitor, "APB VBR",
+                command(ivcam2::AMCGET, 0x4, 0x0, 0x0),
+                sizeof(uint32_t));
+            return std::vector< uint8_t >();
+        }
+
+        return _hw_monitor->send(input);
     }
 
     notification l500_notification_decoder::decode(int value)
