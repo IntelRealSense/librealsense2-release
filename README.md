@@ -1,3 +1,26 @@
+## librealsense2 (eloquent) - 2.38.1-1
+
+The packages in the `librealsense2` repository were released into the `eloquent` distro by running `/usr/bin/bloom-release --ros-distro eloquent --track eloquent librealsense2 --new-track` on `Wed, 16 Sep 2020 08:17:00 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: unknown
+- rosdistro version: `null`
+- old version: `2.38.1-2`
+- new version: `2.38.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.9.8`
+- catkin_pkg version: `0.4.22`
+- rosdep version: `0.19.0`
+- rosdistro version: `0.8.2`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (melodic) - 2.38.1-1
 
 The packages in the `librealsense2` repository were released into the `melodic` distro by running `/usr/bin/bloom-release --ros-distro melodic --track melodic librealsense2 --edit` on `Wed, 09 Sep 2020 07:36:09 -0000`
