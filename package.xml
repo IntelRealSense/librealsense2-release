@@ -13,7 +13,7 @@
   </description>
 
   <maintainer email="librs.ros@intel.com">LibRS ROS Team</maintainer>
-
+  
   <url type="website">https://github.com/IntelRealSense/librealsense/</url>
 
   <author email="librs.ros@intel.com">LibRS ROS Team</author>
