@@ -141,6 +141,7 @@ EXPORTS
     rs2_timestamp_domain_to_string
     rs2_sr300_visual_preset_to_string
     rs2_notification_category_to_string
+    rs2_cah_trigger_to_string
 
     rs2_log_to_console
     rs2_log_to_file
@@ -202,6 +203,8 @@ EXPORTS
     rs2_create_disparity_transform_block
     rs2_create_zero_order_invalidation_block
     rs2_create_huffman_depth_decompress_block
+    rs2_create_hdr_merge_processing_block
+    rs2_create_sequence_id_filter
 
     rs2_embedded_frames_count
     rs2_extract_frame
@@ -239,6 +242,7 @@ EXPORTS
     rs2_rs400_visual_preset_to_string
     rs2_l500_visual_preset_to_string
     rs2_sensor_mode_to_string
+    rs2_host_perf_mode_to_string
     rs2_is_enabled
     rs2_toggle_advanced_mode
     rs2_load_json
