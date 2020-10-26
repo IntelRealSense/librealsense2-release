@@ -973,6 +973,9 @@ namespace rs2
             if (shared_filter->is<hole_filling_filter>())
                 model->enable(false);
 
+            if (shared_filter->is<sequence_id_filter>())
+                model->enable(false);
+
             if (shared_filter->is<decimation_filter>())
             {
                 if (is_rgb_camera)
@@ -1033,13 +1036,17 @@ namespace rs2
             reverse(begin(sensor_profiles), end(sensor_profiles));
             rs2_format def_format{ RS2_FORMAT_ANY };
             auto default_resolution = std::make_pair(1280, 720);
+            auto default_fps = 30;
             for (auto&& profile : sensor_profiles)
             {
                 std::stringstream res;
                 if (auto vid_prof = profile.as<video_stream_profile>())
                 {
                     if (profile.is_default())
+                    {
                         default_resolution = std::pair<int, int>(vid_prof.width(), vid_prof.height());
+                        default_fps = profile.fps();
+                    }
                     res << vid_prof.width() << " x " << vid_prof.height();
                     push_back_if_not_exists(res_values, std::pair<int, int>(vid_prof.width(), vid_prof.height()));
                     push_back_if_not_exists(resolutions, res.str());
@@ -1082,36 +1089,13 @@ namespace rs2
 
             show_single_fps_list = is_there_common_fps();
 
-            // set default selections. USB2 configuration requires low-res resolution/fps.
             int selection_index{};
-            bool usb2 = false;
-            if (dev.supports(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR))
-            {
-                std::string dev_usb_type(dev.get_info(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR));
-                usb2 = (std::string::npos != dev_usb_type.find("2."));
-            }
-
-            int fps_constrain = usb2 ? 15 : 30;
-            auto resolution_constrain = usb2 ? std::make_pair(640, 480) : default_resolution;
-
-            // TODO: Once GLSL parts are properly optimised
-            // and tested on all types of hardware
-            // make sure we use Full-HD YUY overriding the default
-            // This will lower CPU utilisation and generally be faster
-            // if (!usb2 && std::string(s->get_info(RS2_CAMERA_INFO_NAME)) == "RGB Camera")
-            // {
-            //     if (config_file::instance().get(configurations::performance::glsl_for_rendering))
-            //     {
-            //         resolution_constrain = std::make_pair(1920, 1080);
-            //         def_format = RS2_FORMAT_YUYV;
-            //     }
-            // }
 
             if (!show_single_fps_list)
             {
                 for (auto fps_array : fps_values_per_stream)
                 {
-                    if (get_default_selection_index(fps_array.second, fps_constrain, &selection_index))
+                    if (get_default_selection_index(fps_array.second, default_fps, &selection_index))
                     {
                         ui.selected_fps_id[fps_array.first] = selection_index;
                         break;
@@ -1120,7 +1104,7 @@ namespace rs2
             }
             else
             {
-                if (get_default_selection_index(shared_fps_values, fps_constrain, &selection_index))
+                if (get_default_selection_index(shared_fps_values, default_fps, &selection_index))
                     ui.selected_shared_fps_id = selection_index;
             }
 
@@ -1133,7 +1117,7 @@ namespace rs2
                 }
             }
 
-            get_default_selection_index(res_values, resolution_constrain, &selection_index);
+            get_default_selection_index(res_values, default_resolution, &selection_index);
             ui.selected_res_id = selection_index;
 
             // Have the various preset options automatically update based on the resolution of the
@@ -3266,7 +3250,7 @@ namespace rs2
     {
         for (auto&& n : related_notifications) n->dismiss(false);
 
-        _updates->set_device_status(_updates_profile, false);
+        _updates->set_device_status(*_updates_profile, false);
     }
 
 
@@ -3376,11 +3360,13 @@ namespace rs2
         : dev(dev),
         _calib_model(dev),
         syncer(viewer.syncer),
-        _update_readonly_options_timer(std::chrono::seconds(6))
-        , _detected_objects(std::make_shared< atomic_objects_in_frame >()),
+        _update_readonly_options_timer(std::chrono::seconds(6)),
+        _detected_objects(std::make_shared< atomic_objects_in_frame >()),
         _updates(viewer.updates),
+        _updates_profile(std::make_shared<dev_updates_profile::update_profile>()),
         _allow_remove(remove)
     {
+
         if( dev.supports( RS2_CAMERA_INFO_FIRMWARE_VERSION ) && dev.is< device_calibration >() )
         {
             _accuracy_health_model = std::unique_ptr< cah_model >( new cah_model( *this, viewer ) );
@@ -4451,32 +4437,46 @@ namespace rs2
     void device_model::check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates)
     {
         std::weak_ptr<updates_model> updates_model_protected(updates);
-        std::thread check_for_device_updates_thread([ctx, updates_model_protected, this]()
+        std::weak_ptr<dev_updates_profile::update_profile >update_profile_protected(_updates_profile);
+        std::thread check_for_device_updates_thread([ctx, updates_model_protected, this, update_profile_protected]()
         {
             try
             {
 
-                auto server_url = config_file::instance().get(configurations::update::sw_updates_url);
-                sw_update::dev_updates_profile updates_profile(dev, server_url);
+                std::string server_url = config_file::instance().get(configurations::update::sw_updates_url);
+                bool use_local_file = false;
+                const std::string local_file_prefix = "file://";
+
+                // If URL contain a "file://"  prefix, we open it as local file and not downloading it from a server
+                if( server_url.find( local_file_prefix ) == 0 )
+                {
+                    use_local_file = true;
+                    server_url.erase( 0, local_file_prefix.length() );
+                }
+                sw_update::dev_updates_profile updates_profile(dev, server_url, use_local_file);
 
                 bool sw_update_required = updates_profile.retrieve_updates(versions_db_manager::LIBREALSENSE);
                 bool fw_update_required = updates_profile.retrieve_updates(versions_db_manager::FIRMWARE);
 
-                _updates_profile = updates_profile.get_update_profile();
-                updates_model::update_profile_model updates_profile_model(_updates_profile, ctx, this);
-
-                if (sw_update_required || fw_update_required)
+                if (auto update_profile = update_profile_protected.lock())
                 {
-                    if (auto viewer_updates = updates_model_protected.lock())
+                    *update_profile = updates_profile.get_update_profile();
+                    updates_model::update_profile_model updates_profile_model(*update_profile, ctx, this);
+
+
+                    if (sw_update_required || fw_update_required)
                     {
-                        viewer_updates->add_profile(updates_profile_model);
+                        if (auto viewer_updates = updates_model_protected.lock())
+                        {
+                            viewer_updates->add_profile(updates_profile_model);
+                        }
                     }
-                }
-                else
-                {   // For updating current device profile if exists (Could update firmware version)
-                    if (auto viewer_updates = updates_model_protected.lock())
-                    {
-                        viewer_updates->update_profile(updates_profile_model);
+                    else
+                    {   // For updating current device profile if exists (Could update firmware version)
+                        if (auto viewer_updates = updates_model_protected.lock())
+                        {
+                            viewer_updates->update_profile(updates_profile_model);
+                        }
                     }
                 }
             }
@@ -4796,14 +4796,28 @@ namespace rs2
 
                 if (dev.is<rs2::updatable>() && !is_locked)
                 {
-                    if (ImGui::Selectable("Update Unsigned Firmware...", false, updateFwFlags))
+                    // L515 do not support update unsigned image currently
+                    bool is_l515_device = false;
+                    if (dev.supports(RS2_CAMERA_INFO_NAME))
                     {
-                        begin_update_unsigned(viewer, error_message);
+                        std::string dev_name = dev.get_info(RS2_CAMERA_INFO_NAME);
+                        if (dev_name.find("L515") != std::string::npos)
+                        {
+                            is_l515_device = true;
+                        }
                     }
-                    if (ImGui::IsItemHovered())
+
+                    if (!is_l515_device)
                     {
-                        std::string tooltip = to_string() << "Install non official unsigned firmware from file to the device" << (is_streaming ? " (Disabled while streaming)" : "");
-                        ImGui::SetTooltip("%s", tooltip.c_str());
+                        if (ImGui::Selectable("Update Unsigned Firmware...", false, updateFwFlags))
+                        {
+                            begin_update_unsigned(viewer, error_message);
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            std::string tooltip = to_string() << "Install non official unsigned firmware from file to the device" << (is_streaming ? " (Disabled while streaming)" : "");
+                            ImGui::SetTooltip("%s", tooltip.c_str());
+                        }
                     }
                 }
             }
@@ -6076,6 +6090,15 @@ namespace rs2
                                 pb->get_option(opt).draw_option(
                                     dev.is<playback>() || update_read_only_options,
                                     false, error_message, *viewer.not_model);
+
+                                if (opt == RS2_OPTION_MIN_DISTANCE)
+                                {
+                                    pb->get_option(RS2_OPTION_MAX_DISTANCE).update_all_fields(error_message, *viewer.not_model);
+                                }
+                                else if (opt == RS2_OPTION_MAX_DISTANCE)
+                                {
+                                    pb->get_option(RS2_OPTION_MIN_DISTANCE).update_all_fields(error_message, *viewer.not_model);
+                                }
                             }
 
                             ImGui::TreePop();
@@ -6270,6 +6293,15 @@ namespace rs2
                                     pb->get_option(opt).draw_option(
                                         dev.is<playback>() || update_read_only_options,
                                         false, error_message, *viewer.not_model);
+
+                                    if (opt == RS2_OPTION_MIN_DISTANCE)
+                                    {
+                                        pb->get_option(RS2_OPTION_MAX_DISTANCE).update_all_fields(error_message, *viewer.not_model);
+                                    }
+                                    else if (opt == RS2_OPTION_MAX_DISTANCE)
+                                    {
+                                        pb->get_option(RS2_OPTION_MIN_DISTANCE).update_all_fields(error_message, *viewer.not_model);
+                                    }
                                 }
 
                                 ImGui::TreePop();
