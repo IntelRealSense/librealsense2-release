@@ -9,8 +9,8 @@
 #include "core/extension.h"
 #include "fw-update/fw-update-unsigned.h"
 
-static const int NUM_OF_RGB_RESOLUTIONS = 5;
-static const int NUM_OF_DEPTH_RESOLUTIONS = 2;
+static const int MAX_NUM_OF_RGB_RESOLUTIONS = 5;
+static const int MAX_NUM_OF_DEPTH_RESOLUTIONS = 5; 
 
 namespace librealsense
 {
@@ -60,6 +60,8 @@ namespace librealsense
             AMCSET                      = 0x2B, // Set options (L515)
             AMCGET                      = 0x2C, // Get options (L515)
             DELETE_TABLE                = 0x2E,
+            TPROC_TRB_THRSLD_SET        = 0x35, // TPROC TRB threshold
+            TPROC_USB_GRAN_SET          = 0x36, // TPROC USB granularity
             PFD                         = 0x3B, // Disable power features <Parameter1 Name="0 - Disable, 1 - Enable" />
             READ_TABLE                  = 0x43, // read table from flash, for example, read imu calibration table, read_table 0x243 0
             WRITE_TABLE                 = 0x44,
@@ -212,18 +214,21 @@ namespace librealsense
         };
 #pragma pack(pop)
 
+        // <Command Name="GVD" Opcode="0x10" Description="Get Version and Date">
+        // See CommandsIVCAM2.xml for complete up-to-date fields
         enum gvd_fields
         {
-            fw_version_offset = 12,
-            is_camera_locked_offset = 33,
-            module_serial_offset = 56,
-            module_asic_serial_offset = 72
+            is_camera_locked_offset = 6,    // "eyeSafety": encompasses eeprom, flash, & registers
+            fw_version_offset = 12,         // "FunctionalPayloadVersion"
+            module_serial_offset = 60,      // "OpticalHeadModuleSN" -> RS2_CAMERA_INFO_SERIAL_NUMBER
+            module_asic_serial_offset = 74  // "AsicModuleSerial" -> RS2_CAMERA_INFO_ASIC_SERIAL_NUMBER & RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID
         };
 
         enum gvd_fields_size
         {
             // Keep sorted
-            module_serial_size = 8
+            module_serial_size = 4,
+            module_asic_serial_size = 6
         };
 
         static const std::map<std::uint16_t, std::string> rs500_sku_names = {
@@ -244,7 +249,12 @@ namespace librealsense
             depth_stream_soft_error,
             temp_warning,
             temp_critical,
-            DFU_error
+            DFU_error,
+            fall_detected = 12,
+            ld_alarm = 14,
+            hard_error = 15,
+            ld_alarm_hard_error = 16,
+            pzr_vbias_exceed_limit = 17
         };
 
         // Elaborate FW XU report.
@@ -254,27 +264,17 @@ namespace librealsense
             { overflow_infrared,            "Overflow occur on infrared stream" },
             { overflow_depth,               "Overflow occur on depth stream" },
             { overflow_confidence,          "Overflow occur on confidence stream" },
-            { depth_stream_hard_error,      "Stream stoped. \nNon recoverable. power reset may help" },
+            { depth_stream_hard_error,      "Receiver light saturation, stream stopped for 1 sec" },
             { depth_stream_soft_error,      "Error that may be overcome in few sec. \nStream stoped. May be recoverable" },
             { temp_warning,                 "Warning, temperature close to critical" },
             { temp_critical,                "Critical temperature reached" },
             { DFU_error,                    "DFU error" },
+            { fall_detected,                "Fall detected stream stopped"  },
+            { ld_alarm,                     "Fatal error accrue (14)" },
+            { hard_error,                   "Fatal error accrue (15)" },
+            { ld_alarm_hard_error,          "Fatal error accrue (16)" },
+            { pzr_vbias_exceed_limit,       "Fatal error accrue (17)" },
         };
-
-        template<class T>
-        const T* check_calib(const std::vector<uint8_t>& raw_data)
-        {
-            using namespace std;
-
-            auto table = reinterpret_cast<const T*>(raw_data.data());
-
-            if (raw_data.size() < sizeof(T))
-            {
-                throw invalid_value_exception(to_string() << "Calibration data invald, buffer too small : expected " << sizeof(T) << " , actual: " << raw_data.size());
-            }
-
-            return table;
-        }
 
 #pragma pack(push, 1)
         struct pinhole_model
@@ -318,7 +318,7 @@ namespace librealsense
             uint16_t reserved16;
             uint8_t reserved8;
             uint8_t num_of_resolutions;
-            intrinsic_per_resolution intrinsic_resolution[NUM_OF_DEPTH_RESOLUTIONS]; //Dynamic number of entries according to num of resolutions
+            intrinsic_per_resolution intrinsic_resolution[MAX_NUM_OF_DEPTH_RESOLUTIONS]; //Dynamic number of entries according to num of resolutions
         };
 
         struct orientation
@@ -341,7 +341,7 @@ namespace librealsense
             uint16_t reserved16;
             uint8_t reserved8;
             uint8_t num_of_resolutions;
-            pinhole_camera_model intrinsic_resolution[NUM_OF_RGB_RESOLUTIONS]; //Dynamic number of entries according to num of resolutions
+            pinhole_camera_model intrinsic_resolution[MAX_NUM_OF_RGB_RESOLUTIONS]; //Dynamic number of entries according to num of resolutions
         };
 
         struct rgb_common
@@ -533,6 +533,5 @@ namespace librealsense
         };
 
         class ac_trigger;
-
     } // librealsense::ivcam2
 } // namespace librealsense
