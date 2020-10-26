@@ -47,12 +47,6 @@ namespace librealsense
         auto max_value = float(*(reinterpret_cast<int32_t*>(max.data())));
         auto min_value = float(*(reinterpret_cast<int32_t*>(min.data())));
 
-        if (type == noise_filtering) 
-        {
-            // Hack until addressed in firmware
-            min_value = std::min(max_value, std::max(min_value, 2.f));
-        }
-
         _range = option_range{ min_value,
             max_value,
             float(*(reinterpret_cast<int32_t*>(step.data()))),
@@ -94,7 +88,12 @@ namespace librealsense
         }
         else
         {
-            auto resolution_option = std::make_shared<float_option_with_description<rs2_sensor_mode>>(option_range{ RS2_SENSOR_MODE_VGA,RS2_SENSOR_MODE_COUNT - 1,1, RS2_SENSOR_MODE_XGA }, "Notify the sensor about the intended streaming mode. Required for preset ");
+            // On USB2 we have only QVGA sensor mode
+            bool usb3mode = (_usb_mode >= platform::usb3_type || _usb_mode == platform::usb_undefined);
+
+            auto default_sensor_mode = static_cast<float>(usb3mode ? RS2_SENSOR_MODE_VGA : RS2_SENSOR_MODE_QVGA);
+
+            auto resolution_option = std::make_shared<float_option_with_description<rs2_sensor_mode>>(option_range{ RS2_SENSOR_MODE_VGA,RS2_SENSOR_MODE_COUNT - 1,1, default_sensor_mode }, "Notify the sensor about the intended streaming mode. Required for preset ");
 
             depth_sensor.register_option(RS2_OPTION_SENSOR_MODE, resolution_option);
 
