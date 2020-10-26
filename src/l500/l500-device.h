@@ -79,15 +79,17 @@ namespace librealsense
         void update_flash_internal(std::shared_ptr<hw_monitor> hwm, const std::vector<uint8_t>& image, std::vector<uint8_t>& flash_backup,
             update_progress_callback_ptr callback, int update_mode);
 
+
     protected:
+
         friend class l500_depth_sensor;
 
         std::shared_ptr<hw_monitor> _hw_monitor;
         uint8_t _depth_device_idx;
 
-        std::unique_ptr<polling_error_handler> _polling_error_handler;
+        std::shared_ptr<polling_error_handler> _polling_error_handler;
 
-        lazy<std::vector<uint8_t>> _calib_table_raw;
+        lazy<ivcam2::intrinsic_depth> _calib_table;
         firmware_version _fw_version;
         std::shared_ptr<stream_interface> _depth_stream;
         std::shared_ptr<stream_interface> _ir_stream;
@@ -105,6 +107,7 @@ namespace librealsense
         std::vector<rs2_option> _advanced_options;
 
         std::vector< calibration_change_callback_ptr > _calibration_change_callbacks;
+        platform::usb_spec _usb_mode;
     };
 
     class l500_notification_decoder : public notification_decoder

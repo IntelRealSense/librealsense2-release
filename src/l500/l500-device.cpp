@@ -93,26 +93,21 @@ namespace librealsense
         _hw_monitor->get_gvd(gvd_buff.size(), gvd_buff.data(), GVD);
 
         auto optic_serial = _hw_monitor->get_module_serial_string(gvd_buff, module_serial_offset, module_serial_size);
-        auto asic_serial = _hw_monitor->get_module_serial_string(gvd_buff, module_asic_serial_offset, module_serial_size);
+        auto asic_serial = _hw_monitor->get_module_serial_string(gvd_buff, module_asic_serial_offset, module_asic_serial_size);
         auto fwv = _hw_monitor->get_firmware_version_string(gvd_buff, fw_version_offset);
         _fw_version = firmware_version(fwv);
         firmware_version recommended_fw_version(L5XX_RECOMMENDED_FIRMWARE_VERSION);
 
         _is_locked = _hw_monitor->get_gvd_field<bool>(gvd_buff, is_camera_locked_offset);
 
-        // TODO: flash lock is not suuported yet.
-        // reporting lock to the application blocks flash FW update.
-        // remove when flash update support is required.
-        _is_locked = true; 
-
         auto pid_hex_str = hexify(group.uvc_devices.front().pid);
 
         using namespace platform;
 
-        auto usb_mode = raw_depth_sensor.get_usb_specification();
-        if (usb_spec_names.count(usb_mode) && (usb_undefined != usb_mode))
+        _usb_mode = raw_depth_sensor.get_usb_specification();
+        if (usb_spec_names.count(_usb_mode) && (usb_undefined != _usb_mode))
         {
-            auto usb_type_str = usb_spec_names.at(usb_mode);
+            auto usb_type_str = usb_spec_names.at(_usb_mode);
             register_info(RS2_CAMERA_INFO_USB_TYPE_DESCRIPTOR, usb_type_str);
         }
 
@@ -188,7 +183,7 @@ namespace librealsense
         bool should_process( const rs2::frame & f ) override {
             auto fs = f.as< rs2::frameset >();
             if( fs )
-                return false;  // we'll get the ndividual frames back by themselves:
+                return false;  // we'll get the individual frames back by themselves:
             auto it = std::find( _streams.begin(), _streams.end(), f.get_profile().stream_type() );
             return ( it != _streams.end() );  // keep the frame only if one of those we got
         }
@@ -267,30 +262,6 @@ namespace librealsense
             }
         );
 
-        depth_sensor.register_processing_block(
-            { {RS2_FORMAT_Z16}, {RS2_FORMAT_Y8} },
-            { {RS2_FORMAT_Z16, RS2_STREAM_DEPTH} },
-            [=]() {
-                auto is_zo_enabled_opt = weak_is_zo_enabled_opt.lock();
-                auto z16rot = std::make_shared<identity_processing_block>();
-                auto y8rot = std::make_shared<identity_processing_block>();
-                auto sync = std::make_shared<syncer_process_unit>(); // is_zo_enabled_opt );
-                auto zo = std::make_shared<zero_order>(is_zo_enabled_opt);
-
-                auto cpb = std::make_shared<composite_processing_block>();
-                cpb->add(z16rot);
-                cpb->add(y8rot);
-                cpb->add(sync);
-                cpb->add(zo);
-                if( _autocal )
-                {
-                    //sync->add_enabling_option( _autocal->get_enabler_opt() );
-                    cpb->add( std::make_shared< ac_trigger::depth_processing_block >( _autocal ) );
-                }
-                cpb->add( std::make_shared< filtering_processing_block >( RS2_STREAM_DEPTH ) );
-                return cpb;
-            }
-        );
 
         depth_sensor.register_processing_block(
             { {RS2_FORMAT_Z16}, {RS2_FORMAT_Y8}, {RS2_FORMAT_RAW8} },
@@ -329,15 +300,12 @@ namespace librealsense
             []() { return std::make_shared<rotation_transform>(RS2_FORMAT_Y8, RS2_STREAM_INFRARED, RS2_EXTENSION_VIDEO_FRAME); }
         );
 
-        depth_sensor.register_processing_block(processing_block_factory::create_id_pbf(RS2_FORMAT_Y8, RS2_STREAM_INFRARED));
-
         depth_sensor.register_processing_block(
             { {RS2_FORMAT_RAW8} },
             { {RS2_FORMAT_RAW8, RS2_STREAM_CONFIDENCE, 0, 0, 0, 0, &l500_confidence_resolution} },
             []() { return std::make_shared<confidence_rotation_transform>(); }
         );
 
-        depth_sensor.register_processing_block(processing_block_factory::create_id_pbf(RS2_FORMAT_RAW8, RS2_STREAM_CONFIDENCE));
 
         std::shared_ptr< freefall_option > freefall_opt;
         if( _fw_version >= firmware_version( "1.3.5.0" ) )
@@ -431,7 +399,8 @@ namespace librealsense
             throw wrong_api_call_sequence_exception("_hw_monitor is not initialized yet");
 
         command cmd(ivcam2::fw_cmd::MRD, ivcam2::REGISTER_CLOCK_0, ivcam2::REGISTER_CLOCK_0 + 4);
-        auto res = _hw_monitor->send(cmd);
+        // Redirect HW Monitor commands to used atomic (UVC) transfers for faster transactions and transfer integrity
+        auto res = _hw_monitor->send(cmd, nullptr, true);
 
         if (res.size() < sizeof(uint32_t))
         {
