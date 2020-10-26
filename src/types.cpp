@@ -240,6 +240,19 @@ namespace librealsense
 #undef CASE
     }
 
+    const char* get_string(rs2_host_perf_mode value)
+    {
+#define CASE(X) STRCASE(HOST_PERF, X)
+        switch (value)
+        {
+            CASE(DEFAULT)
+            CASE(LOW)
+            CASE(HIGH)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+
     const char* get_string(rs2_extension value)
     {
 #define CASE(X) STRCASE(EXTENSION, X)
@@ -296,6 +309,8 @@ namespace librealsense
             CASE(AUTO_CALIBRATION_FILTER)
             CASE(DEVICE_CALIBRATION)
             CASE(CALIBRATED_SENSOR)
+            CASE(SEQUENCE_ID_FILTER)
+            CASE(HDR_MERGE)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -411,6 +426,11 @@ namespace librealsense
             CASE(THERMAL_COMPENSATION)
             CASE(TRIGGER_CAMERA_ACCURACY_HEALTH)
             CASE(RESET_CAMERA_ACCURACY_HEALTH)
+            CASE(HOST_PERFORMANCE)
+            CASE(HDR_ENABLED)
+            CASE(SEQUENCE_NAME)
+            CASE(SEQUENCE_SIZE)
+            CASE(SEQUENCE_ID)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -533,6 +553,9 @@ namespace librealsense
             CASE(FRAME_LED_POWER)
             CASE(RAW_FRAME_SIZE)
             CASE(GPIO_INPUT_DATA)
+            CASE(SEQUENCE_NAME)
+            CASE(SEQUENCE_ID)
+            CASE(SEQUENCE_SIZE)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -600,6 +623,7 @@ namespace librealsense
         }
 #undef CASE
     }
+
     std::string firmware_version::to_string() const
     {
         if (is_any) return "any";

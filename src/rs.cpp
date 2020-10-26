@@ -31,6 +31,8 @@
 #include "proc/hole-filling-filter.h"
 #include "proc/color-formats-converter.h"
 #include "proc/rates-printer.h"
+#include "proc/hdr-merge.h"
+#include "proc/sequence_id_filter.h"
 #include "media/playback/playback_device.h"
 #include "stream.h"
 #include "../include/librealsense2/h/rs_types.h"
@@ -1268,6 +1270,7 @@ const char* rs2_ambient_light_to_string( rs2_ambient_light ambient )            
 const char* rs2_cah_trigger_to_string( rs2_cah_trigger mode )                             { return get_string(mode); }
 const char* rs2_calibration_type_to_string(rs2_calibration_type type)                     { return get_string(type); }
 const char* rs2_calibration_status_to_string(rs2_calibration_status status)               { return get_string(status); }
+const char* rs2_host_perf_mode_to_string(rs2_host_perf_mode mode)                         { return get_string(mode); }
 
 void rs2_log_to_console(rs2_log_severity min_severity, rs2_error** error) BEGIN_API_CALL
 {
@@ -1335,7 +1338,7 @@ unsigned rs2_get_log_message_line_number( rs2_log_message const* msg, rs2_error*
 {
     VALIDATE_NOT_NULL( msg );
     log_message const& wrapper = *(log_message const*) (msg);
-    return wrapper.el_msg.line();
+    return wrapper.get_log_message_line_number();
 }
 HANDLE_EXCEPTIONS_AND_RETURN( 0, msg )
 
@@ -1343,7 +1346,7 @@ const char* rs2_get_log_message_filename( rs2_log_message const* msg, rs2_error*
 {
     VALIDATE_NOT_NULL( msg );
     log_message const& wrapper = *(log_message const*) (msg);
-    return wrapper.el_msg.file().c_str();
+    return wrapper.get_log_message_filename();
 }
 HANDLE_EXCEPTIONS_AND_RETURN( nullptr, msg )
 
@@ -1351,7 +1354,7 @@ const char* rs2_get_raw_log_message( rs2_log_message const* msg, rs2_error** err
 {
     VALIDATE_NOT_NULL( msg );
     log_message const & wrapper = *( log_message const * )( msg );
-    return wrapper.el_msg.message().c_str();
+    return wrapper.get_raw_log_message();
 }
 HANDLE_EXCEPTIONS_AND_RETURN( nullptr, msg )
 
@@ -1359,12 +1362,7 @@ const char* rs2_get_full_log_message( rs2_log_message const* msg, rs2_error** er
 {
     VALIDATE_NOT_NULL( msg );
     log_message & wrapper = *( log_message * )( msg );
-    if( wrapper.built_msg.empty() )
-    {
-        bool const append_new_line = false;
-        wrapper.built_msg = wrapper.el_msg.logger()->logBuilder()->build( &wrapper.el_msg, append_new_line );
-    }
-    return wrapper.built_msg.c_str();
+    return wrapper.get_full_log_message();
 }
 HANDLE_EXCEPTIONS_AND_RETURN( nullptr, msg )
 
@@ -1466,6 +1464,8 @@ int rs2_is_processing_block_extendable_to(const rs2_processing_block* f, rs2_ext
     case RS2_EXTENSION_HOLE_FILLING_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::hole_filling_filter) != nullptr;
     case RS2_EXTENSION_ZERO_ORDER_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::zero_order) != nullptr;
     case RS2_EXTENSION_DEPTH_HUFFMAN_DECODER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::depth_decompression_huffman) != nullptr;
+    case RS2_EXTENSION_HDR_MERGE: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::hdr_merge) != nullptr;
+    case RS2_EXTENSION_SEQUENCE_ID_FILTER: return VALIDATE_INTERFACE_NO_THROW((processing_block_interface*)(f->block.get()), librealsense::sequence_id_filter) != nullptr;
   
     default:
         return false;
@@ -2260,6 +2260,22 @@ NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
 rs2_processing_block* rs2_create_huffman_depth_decompress_block(rs2_error** error) BEGIN_API_CALL
 {
     auto block = std::make_shared<librealsense::depth_decompression_huffman>();
+
+    return new rs2_processing_block{ block };
+}
+NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
+
+rs2_processing_block* rs2_create_hdr_merge_processing_block(rs2_error** error) BEGIN_API_CALL
+{
+    auto block = std::make_shared<librealsense::hdr_merge>();
+
+    return new rs2_processing_block{ block };
+}
+NOARGS_HANDLE_EXCEPTIONS_AND_RETURN(nullptr)
+
+rs2_processing_block* rs2_create_sequence_id_filter(rs2_error** error) BEGIN_API_CALL
+{
+    auto block = std::make_shared<librealsense::sequence_id_filter>();
 
     return new rs2_processing_block{ block };
 }
