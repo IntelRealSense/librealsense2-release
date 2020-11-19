@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include <unordered_set>
 #include "model-views.h"
 #include "notifications.h"
-#include "viewer.h"
 #include "skybox.h"
 #include "measurement.h"
 #include "updates-model.h"
@@ -119,6 +119,8 @@ namespace rs2
 
         void gc_streams();
 
+        bool is_option_skipped(rs2_option opt) const;
+
         std::mutex streams_mutex;
         std::map<int, stream_model> streams;
         std::map<int, int> streams_origin;
@@ -179,6 +181,7 @@ namespace rs2
         bool show_help_screen = false;
         bool occlusion_invalidation = true;
         bool glsl_available = false;
+        bool modal_notification_on = false; // a notification which was expanded
 
         press_button_model trajectory_button{ u8"\uf1b0", u8"\uf1b0","Draw trajectory", "Stop drawing trajectory", true };
         press_button_model grid_object_button{ u8"\uf1cb", u8"\uf1cb",  "Configure Grid", "Configure Grid", false };
@@ -188,10 +191,11 @@ namespace rs2
 
         std::shared_ptr<updates_model> updates;
 
+        std::unordered_set<int> _hidden_options;
     private:
 
         void check_permissions();
-
+        void hide_common_options();
         std::vector<popup> _active_popups;
 
         struct rgb {
@@ -250,5 +254,6 @@ namespace rs2
         skybox _skybox;
 
         measurement _measurements;
+        
     };
 }
