@@ -1,4 +1,4 @@
-From 9935cd6d54830b90b996e00085e08ffbdd947bb8 Mon Sep 17 00:00:00 2001
+From 9158157dbb97092020f15f6e8f095177b4ef60c5 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Thu, 25 Jun 2020 02:26:56 -0700
 Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
@@ -11,7 +11,7 @@ Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
 diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
 old mode 100644
 new mode 100755
-index 8b78aa7..d62a159
+index 4f1d794..3f7aa32
 --- a/CMake/lrs_options.cmake
 +++ b/CMake/lrs_options.cmake
 @@ -1,4 +1,4 @@
@@ -39,5 +39,5 @@ index 8b78aa7..d62a159
  option(FORCE_LIBUVC "Explicitly turn-on libuvc backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
  option(FORCE_WINUSB_UVC "Explicitly turn-on winusb_uvc (for win7) backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
 -- 
-2.17.1
+2.7.4
 
