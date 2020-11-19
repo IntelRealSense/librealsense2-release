@@ -473,9 +473,13 @@ namespace Intel.RealSense
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
         internal static extern void rs2_get_motion_intrinsics(IntPtr profile, out MotionDeviceIntrinsics intrinsics, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
 
-#endregion
-#region rs_device
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern float rs2_get_max_usable_depth_range(IntPtr sensor, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
+
+
+    #endregion
+    #region rs_device
+    [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int rs2_get_device_count(IntPtr info_list, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
 
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
@@ -735,6 +739,9 @@ namespace Intel.RealSense
         internal static extern void rs2_delete_fw_log_message(IntPtr fw_log);
 
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern uint rs2_get_number_of_fw_logs(IntPtr device, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
+
+        [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
         internal static extern int rs2_get_fw_log(IntPtr device, IntPtr fw_log_, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
 
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
@@ -781,6 +788,10 @@ namespace Intel.RealSense
 
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
         internal static extern uint rs2_get_fw_log_parsed_timestamp(IntPtr fw_parsed_log, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
+        
+        [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern uint rs2_get_fw_log_parsed_sequence_id(IntPtr fw_parsed_log, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ErrorMarshaler))] out object error);
+
         #endregion
         #region terminal_parser
         [DllImport(dllName, CallingConvention = CallingConvention.Cdecl)]

@@ -218,8 +218,11 @@ namespace Intel.RealSense
         /// <summary>Enable\disable pixel invalidation</summary>
         InvalidationBypass = 68,
 
-        /// <summary>Change the depth ambient light see rs2_ambient_light for values</summary>
+        /// <summary>Deprecated - Use digital gain option, Change the depth ambient light see rs2_ambient_light for values</summary>
         AmbientLightEnvLevel = 69,
+
+        /// <summary>Change the depth digital gain see rs2_digital_gain for values</summary>
+        DigitalGain = 69,
 
         /// <summary>The resolution mode: see rs2_sensor_mode for values</summary>
         SensorMode = 70,
@@ -249,6 +252,22 @@ namespace Intel.RealSense
         SequenceSize = 78,
 
         /// <summary>Subpreset sequence id - for D400 SKUs</summary>
-        SequenceId = 79
+        SequenceId = 79,
+
+        /// <summary>Humidity temperature [Deg Celsius]</summary>
+        HumidityTemperature = 80,
+
+        /// <summary>Turn on/off the maximum usable range who calculates the maximum range of the camera given the amount of ambient light in the scene </summary>
+         EnableMaxUsableRange = 81,
+
+        /// <summary>Turn on/off the alternate IR, When enabling alternate IR, the IR image is holding the amplitude of the depth correlation. </summary>
+        AlternateIR = 82,
+
+        /// <summary>Noise estimation on the IR image</summary>
+        NoiseEstimation = 83,
+
+        /// <summary>Enables data collection for calculating IR pixel reflectivity</summary>
+        EnableIrReflectivity = 84
+
     }
 }

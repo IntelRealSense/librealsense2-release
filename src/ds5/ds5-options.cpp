@@ -505,10 +505,12 @@ namespace librealsense
         std::vector<uint8_t> pattern{};
 
         if (static_cast<int>(value))
+        {
             if (_is_fw_version_using_id)
                 pattern = ds::alternating_emitter_pattern;
             else
                 pattern = ds::alternating_emitter_pattern_with_name;
+        }
 
         command cmd(ds::SETSUBPRESET, static_cast<int>(pattern.size()));
         cmd.data = pattern;
@@ -613,7 +615,13 @@ namespace librealsense
         if (_hdr_cfg->is_config_in_process())
             _hdr_option->set(value);
         else
-            _uvc_option->set(value);
+        {
+            if (_hdr_cfg->is_enabled())
+                LOG_WARNING("The control - " << _uvc_option->get_description()
+                     << " - is locked while HDR mode is active.\n"); 
+            else
+                _uvc_option->set(value);
+        }
     }
 
     float hdr_conditional_option::query() const
