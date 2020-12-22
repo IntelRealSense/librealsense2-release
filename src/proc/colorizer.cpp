@@ -151,10 +151,18 @@ namespace librealsense
         _maps = { &jet, &classic, &grayscale, &inv_grayscale, &biomes, &cold, &warm, &quantized, &pattern, &hue };
 
         auto min_opt = std::make_shared<ptr_option<float>>(0.f, 16.f, 0.1f, 0.f, &_min, "Min range in meters");
-        register_option(RS2_OPTION_MIN_DISTANCE, min_opt);
 
         auto max_opt = std::make_shared<ptr_option<float>>(0.f, 16.f, 0.1f, 6.f, &_max, "Max range in meters");
-        register_option(RS2_OPTION_MAX_DISTANCE, max_opt);
+
+        register_option(RS2_OPTION_MAX_DISTANCE,
+            std::make_shared<max_distance_option>(
+                max_opt,
+                min_opt));
+
+        register_option(RS2_OPTION_MIN_DISTANCE,
+            std::make_shared<min_distance_option>(
+                min_opt,
+                max_opt));
 
         auto color_map = std::make_shared<ptr_option<int>>(0, (int)_maps.size() - 1, 1, 0, &_map_index, "Color map");
         color_map->set_description(0.f, "Jet");
@@ -230,10 +238,29 @@ namespace librealsense
         if (f.get_profile().get() != _source_stream_profile.get())
         {
             _source_stream_profile = f.get_profile();
-            _target_stream_profile = f.get_profile().clone(RS2_STREAM_DEPTH, 0, RS2_FORMAT_RGB8);
+            _target_stream_profile = f.get_profile().clone(RS2_STREAM_DEPTH, f.get_profile().stream_index(), RS2_FORMAT_RGB8);
 
-            auto info = disparity_info::update_info_from_frame(f);
-            _depth_units = info.depth_units;
+            auto snr = ( (frame_interface *)f.get() )->get_sensor().get();
+            auto depth_sensor = As< librealsense::depth_sensor >( snr );
+            if( depth_sensor )
+                _depth_units = depth_sensor->get_depth_scale();
+            else
+            {
+                // For playback sensors
+                auto extendable = As< librealsense::extendable_interface >( snr );
+                if( extendable
+                    && extendable->extend_to( TypeToExtension< librealsense::depth_sensor >::value,
+                                              (void **)( &depth_sensor ) ) )
+                {
+                    _depth_units = depth_sensor->get_depth_scale();
+                }
+                else
+                {
+                    LOG_ERROR( "Failed to query depth units from sensor" );
+                    throw std::runtime_error( "failed to query depth units from sensor" );
+                }
+            }
+            auto info = disparity_info::update_info_from_frame( f );
             _d2d_convert_factor = info.d2d_convert_factor;
         }
 
@@ -288,6 +315,7 @@ namespace librealsense
                 auto min = _min;
                 auto max = _max;
                 auto coloring_function = [&, this](float data) {
+                    if (min >= max) return 0.f;
                     return (data * _depth_units - min) / (max - min);
                 };
                 make_rgb_data<uint16_t>(depth_data, rgb_data, w, h, coloring_function);

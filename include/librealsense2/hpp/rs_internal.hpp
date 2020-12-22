@@ -230,7 +230,7 @@ namespace rs2
             error::handle(e);
         }
         /**
-        * Sensors hold the parent device in scope via a shared_ptr. This function detaches that so that the 
+        * Sensors hold the parent device in scope via a shared_ptr. This function detaches that so that the
         * software sensor doesn't keep the software device alive. Note that this is dangerous as it opens the
         * door to accessing freed memory if care isn't taken.
         */
@@ -465,6 +465,14 @@ namespace rs2
             return timestamp;
         }
 
+        uint32_t sequence_id() const
+        {
+            rs2_error* e = nullptr;
+            uint32_t sequence(rs2_get_fw_log_parsed_sequence_id(_parsed_fw_log.get(), &e));
+            error::handle(e);
+            return sequence;
+        }
+
         const std::shared_ptr<rs2_firmware_log_parsed_message> get_message() const { return _parsed_fw_log; }
 
     private:
@@ -549,6 +557,15 @@ namespace rs2
             error::handle(e);
 
             return parsingResult;
+        }
+
+        unsigned int get_number_of_fw_logs() const
+        {
+            rs2_error* e = nullptr;
+            unsigned int num_of_fw_logs = rs2_get_number_of_fw_logs(_dev.get(), &e);
+            error::handle(e);
+
+            return num_of_fw_logs;
         }
     };
 

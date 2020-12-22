@@ -16,20 +16,22 @@
 #include "stream.h"
 #include "l500-private.h"
 #include "error-handling.h"
-#include "frame-validator.h"
 #include "l500-options.h"
 #include "calibrated-sensor.h"
+#include "max-usable-range-sensor.h"
 
 namespace librealsense
 {
-
     class l500_depth : public virtual l500_device
     {
     public:
-        std::vector<uint8_t> get_raw_calibration_table() const;
+
+        ivcam2::intrinsic_depth read_intrinsics_table() const;
 
         l500_depth(std::shared_ptr<context> ctx,
             const platform::backend_device_group& group);
+
+        ~l500_depth() { stop_temperatures_reader(); }
 
         std::vector<tagged_profile> get_profiles_tags() const override;
 
@@ -90,6 +92,7 @@ namespace librealsense
         , public virtual depth_sensor
         , public virtual l500_depth_sensor_interface
         , public calibrated_sensor
+        , public max_usable_range_sensor
     {
     public:
         explicit l500_depth_sensor(
@@ -98,6 +101,8 @@ namespace librealsense
             std::map< uint32_t, rs2_format > l500_depth_sourcc_to_rs2_format_map,
             std::map< uint32_t, rs2_stream > l500_depth_sourcc_to_rs2_stream_map
         );
+        
+        ~l500_depth_sensor();
 
         std::vector<rs2_option> get_supported_options() const override
         {
@@ -114,16 +119,6 @@ namespace librealsense
                 options.push_back(option);
 
             return options;
-        }
-
-        virtual const char* get_option_name(rs2_option option) const override
-        {
-            if(option == static_cast<rs2_option>(RS2_OPTION_DEPTH_INVALIDATION_ENABLE))
-            {
-                static const std::string str = make_less_screamy("DEPTH_INVALIDATION_ENABLE");
-                return str.c_str();
-            }
-            return options_container::get_option_name(option);
         }
 
         static ivcam2::intrinsic_params get_intrinsic_params(const uint32_t width, const uint32_t height, ivcam2::intrinsic_depth intrinsic)
@@ -221,8 +216,10 @@ namespace librealsense
         ivcam2::intrinsic_depth get_intrinsic() const override
         {
             using namespace ivcam2;
-            return *check_calib<intrinsic_depth>(*_owner->_calib_table_raw);
+            return *_owner->_calib_table;
         }
+
+        float get_max_usable_depth_range() const override;
 
         void create_snapshot(std::shared_ptr<depth_sensor>& snapshot) const override
         {
@@ -260,13 +257,14 @@ namespace librealsense
         void open(const stream_profiles& requests) override;
         void stop() override;
         float get_depth_offset() const;
+        bool is_max_range_preset() const;
+
     private:
+
         action_delayer _action_delayer;
         l500_device * const _owner;
         float _depth_units;
         stream_profiles _user_requests;
         stream_profiles _validator_requests;
-        bool _depth_invalidation_enabled;
-        std::shared_ptr<depth_invalidation_option> _depth_invalidation_option;
     };
 }

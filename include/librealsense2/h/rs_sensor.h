@@ -484,7 +484,7 @@ void rs2_override_extrinsics( const rs2_sensor* sensor, const rs2_extrinsics* ex
 void rs2_get_video_stream_intrinsics(const rs2_stream_profile* mode, rs2_intrinsics* intrinsics, rs2_error** error);
 
 /**
- * Returns the list of recommended processing blocks for a specific sensor. 
+ * Returns the list of recommended processing blocks for a specific sensor.
  * Order and configuration of the blocks are decided by the sensor
  * \param[in] sensor          input sensor
  * \param[out] error  if non-null, receives any error that occurs during this call, otherwise, errors are ignored
@@ -647,6 +647,12 @@ void rs2_reset_sensor_calibration( rs2_sensor const * sensor, rs2_error** error 
 */
 void rs2_set_motion_device_intrinsics(const rs2_sensor* sensor, const rs2_stream_profile* profile, const rs2_motion_device_intrinsic* intrinsics, rs2_error** error);
 
+/** When called on a depth sensor, this method will return the maximum range of the camera given the amount of ambient light in the scene
+* \param[in] sensor      depth sensor
+* \param[out] error      if non-null, receives any error that occurs during this call, otherwise, errors are ignored
+* \return                the max usable range in meters
+*/
+float rs2_get_max_usable_depth_range(rs2_sensor const * sensor, rs2_error** error);
 
 #ifdef __cplusplus
 }

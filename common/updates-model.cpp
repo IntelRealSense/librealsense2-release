@@ -37,10 +37,9 @@ void updates_model::draw(viewer_model& viewer, ux_window& window, std::string& e
     const auto window_name = "Updates Window";
      
     //Main window pop up only if essential updates exists
-    if (!popup_opened && updates_copy.size() && !ignore)
+    if (updates_copy.size())
     {
         ImGui::OpenPopup(window_name);
-        popup_opened = true;
     }
 
     position_params positions;
@@ -135,12 +134,12 @@ void updates_model::draw(viewer_model& viewer, ux_window& window, std::string& e
             // ===========================================================================
             // Draw Software update Pane
             // ===========================================================================
-            sw_update_needed = draw_software_section(window_name, update, positions, window);
+            sw_update_needed = draw_software_section(window_name, update, positions, window, error_message);
 
             // ===========================================================================
             // Draw Firmware update Pane
             // ===========================================================================
-            fw_update_needed = draw_firmware_section(viewer, window_name, update, positions, window);
+            fw_update_needed = draw_firmware_section(viewer, window_name, update, positions, window, error_message);
 
         }
         else 
@@ -198,11 +197,9 @@ void updates_model::draw(viewer_model& viewer, ux_window& window, std::string& e
                     }
 
                     ImGui::CloseCurrentPopup();
-                    popup_opened = false;
                     emphasize_dismiss_text = false;
                     ignore = false;
                     _fw_update_state = fw_update_states::ready;
-                    ignore = false;
                     _fw_download_progress = 0;
                 }
             }
@@ -237,7 +234,7 @@ void updates_model::draw(viewer_model& viewer, ux_window& window, std::string& e
 
 }
 
-bool updates_model::draw_software_section(const char * window_name, update_profile_model& selected_profile, position_params& pos, ux_window& window)
+bool updates_model::draw_software_section(const char * window_name, update_profile_model& selected_profile, position_params& pos, ux_window& window, std::string& error_message)
 {
     bool essential_sw_update_needed(false);
     bool recommended_sw_update_needed(false);
@@ -496,7 +493,7 @@ bool updates_model::draw_software_section(const char * window_name, update_profi
     }
     return essential_sw_update_needed;
 }
-bool updates_model::draw_firmware_section(viewer_model& viewer, const char * window_name, update_profile_model& selected_profile, position_params& pos, ux_window& window)
+bool updates_model::draw_firmware_section(viewer_model& viewer, const char * window_name, update_profile_model& selected_profile, position_params& pos, ux_window& window, std::string& error_message)
 {
     bool essential_fw_update_needed(false);
     bool recommended_fw_update_needed(false);
@@ -785,6 +782,12 @@ bool updates_model::draw_firmware_section(viewer_model& viewer, const char * win
                 _fw_update_state = fw_update_states::failed_updating;
                 _fw_image.clear();
                 _fw_download_progress = 0;
+            }
+            // Verify an error window will not pop up. ImGui cannot handle 2 PopUpModals in parallel.
+            if (!error_message.empty())
+            {
+                LOG_ERROR("error caught during update process, details: " + error_message);
+                error_message.clear();
             }
 
         }

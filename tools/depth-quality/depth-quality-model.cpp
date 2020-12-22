@@ -33,6 +33,9 @@ namespace rs2
             _viewer_model.draw_plane = true;
             _viewer_model.synchronization_enable = false;
             _viewer_model.support_non_syncronized_mode = false; //pipeline outputs only syncronized frameset
+
+            // Hide options from the DQT application
+            _viewer_model._hidden_options.emplace(RS2_OPTION_ENABLE_MAX_USABLE_RANGE);
         }
 
         bool tool_model::start(ux_window& window)
@@ -259,7 +262,7 @@ namespace rs2
         void tool_model::draw_guides(ux_window& win, const rect& viewer_rect, bool distance_guide, bool orientation_guide)
         {
             static const float fade_factor = 0.6f;
-            static timer animation_clock;
+            static utilities::time::stopwatch animation_clock;
 
             auto flags = ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoScrollbar |
@@ -322,7 +325,7 @@ namespace rs2
 
             for (int i = 2; i < 7; i += 1)
             {
-                auto t = (animation_clock.elapsed_ms() / 500) * M_PI - i * (M_PI / 5);
+                auto t = (animation_clock.get_elapsed_ms() / 500) * M_PI - i * (M_PI / 5);
                 float alpha = (1.f + float(sin(t))) / 2.f;
 
                 auto c = blend(grey, (1.f - float(i)/7.f)*fade_factor);
@@ -405,7 +408,7 @@ namespace rs2
                             {
                                 for (int j = 1; j < 5; j++)
                                 {
-                                    auto t = (animation_clock.elapsed_ms() / 500) * M_PI - j * (M_PI / 5);
+                                    auto t = (animation_clock.get_elapsed_ms() / 500) * M_PI - j * (M_PI / 5);
                                     auto alpha = (1 + float(sin(t))) / 2.f;
 
                                     ImGui::SetCursorPos({ pos.x + 57, pos.y + bar_spacing * (i - j) + 14 });
@@ -420,7 +423,7 @@ namespace rs2
                             {
                                 for (int j = 1; j < 5; j++)
                                 {
-                                    auto t = (animation_clock.elapsed_ms() / 500) * M_PI - j * (M_PI / 5);
+                                    auto t = (animation_clock.get_elapsed_ms() / 500) * M_PI - j * (M_PI / 5);
                                     auto alpha = (1.f + float(sin(t))) / 2.f;
 
                                     ImGui::SetCursorPos({ pos.x + 57, pos.y + bar_spacing * (i + j) + 14 });
@@ -551,7 +554,7 @@ namespace rs2
                         ImGui::PopStyleVar();
                         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2, 2 });
 
-                        if (_depth_sensor_model->draw_stream_selection())
+                        if (_depth_sensor_model->draw_stream_selection(_error_message))
                         {
                             if (_depth_sensor_model->is_selected_combination_supported())
                             {
@@ -611,13 +614,34 @@ namespace rs2
                         ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, { 1,1,1,1 });
 
                         static std::vector<std::string> items{ "80%", "60%", "40%", "20%" };
-                        if (draw_combo_box("##ROI Percent", items, _roi_combo_index))
+                        int tmp_roi_combo_box = _roi_combo_index;
+                        if (draw_combo_box("##ROI Percent", items, tmp_roi_combo_box))
                         {
-                            if (_roi_combo_index == 0) _roi_percent = 0.8f;
-                            else if (_roi_combo_index == 1) _roi_percent = 0.6f;
-                            else if (_roi_combo_index == 2) _roi_percent = 0.4f;
-                            else if (_roi_combo_index == 3) _roi_percent = 0.2f;
-                            update_configuration();
+                            bool allow_changing_roi = true;
+                            try
+                            {
+                                if (_depth_sensor_model)
+                                {
+                                    auto && ds = _depth_sensor_model->dev.first<depth_sensor>();
+                                    if( ds.supports( RS2_OPTION_ENABLE_IR_REFLECTIVITY )
+                                        && ( ds.get_option( RS2_OPTION_ENABLE_IR_REFLECTIVITY ) == 1.0f ) )
+                                    {
+                                        allow_changing_roi = false;
+                                        _error_message = "ROI cannot be changed while IR Reflectivity is enabled";
+                                    }
+                                }
+                            }
+                            catch (...) {}
+
+                            if (allow_changing_roi)
+                            {
+                                _roi_combo_index = tmp_roi_combo_box;
+                                if (_roi_combo_index == 0) _roi_percent = 0.8f;
+                                else if (_roi_combo_index == 1) _roi_percent = 0.6f;
+                                else if (_roi_combo_index == 2) _roi_percent = 0.4f;
+                                else if (_roi_combo_index == 3) _roi_percent = 0.2f;
+                                update_configuration();
+                            }
                         }
 
                         ImGui::PopStyleColor();
@@ -834,6 +858,7 @@ namespace rs2
                 if (!sub->s->is<depth_sensor>()) continue;
 
                 sub->show_algo_roi = true;
+                sub->roi_percentage = _roi_percent;
                 auto profiles = _pipe.get_active_profile().get_streams();
                 sub->streaming = true;      // The streaming activated externally to the device_model
                 sub->depth_colorizer->set_option(RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED, 0.f);
@@ -1055,7 +1080,7 @@ namespace rs2
 
             const auto left_x = 295.f;
             const auto indicator_flicker_rate = 200;
-            auto alpha_value = static_cast<float>(fabs(sin(_model_timer.elapsed_ms() / indicator_flicker_rate)));
+            auto alpha_value = static_cast<float>(fabs(sin(_model_timer.get_elapsed_ms() / indicator_flicker_rate)));
 
             _trending_up.add_value(has_trend(true));
             _trending_down.add_value(has_trend(false));

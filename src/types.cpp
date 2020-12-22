@@ -227,6 +227,18 @@ namespace librealsense
 #undef CASE
     }
 
+    const char* get_string(rs2_digital_gain value)
+    {
+#define CASE(X) STRCASE(DIGITAL_GAIN, X)
+        switch (value)
+        {
+            CASE(HIGH)
+            CASE(LOW)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+
     const char* get_string( rs2_cah_trigger value )
     {
 #define CASE(X) STRCASE(CAH_TRIGGER, X)
@@ -236,6 +248,19 @@ namespace librealsense
         CASE( NOW )
         CASE( AUTO )
         default: assert( !is_valid( value ) ); return UNKNOWN_VALUE;
+        }
+#undef CASE
+    }
+
+    const char* get_string(rs2_host_perf_mode value)
+    {
+#define CASE(X) STRCASE(HOST_PERF, X)
+        switch (value)
+        {
+            CASE(DEFAULT)
+            CASE(LOW)
+            CASE(HIGH)
+        default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
     }
@@ -296,6 +321,9 @@ namespace librealsense
             CASE(AUTO_CALIBRATION_FILTER)
             CASE(DEVICE_CALIBRATION)
             CASE(CALIBRATED_SENSOR)
+            CASE(SEQUENCE_ID_FILTER)
+            CASE(HDR_MERGE)
+            CASE(MAX_USABLE_RANGE_SENSOR)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -385,7 +413,7 @@ namespace librealsense
             CASE(EMITTER_ON_OFF)
             CASE(ZERO_ORDER_POINT_X)
             CASE(ZERO_ORDER_POINT_Y)
-            CASE(LLD_TEMPERATURE)
+            case RS2_OPTION_LLD_TEMPERATURE:       return "LDD temperature";
             CASE(MC_TEMPERATURE)
             CASE(MA_TEMPERATURE)
             CASE(APD_TEMPERATURE)
@@ -405,12 +433,23 @@ namespace librealsense
             CASE(PRE_PROCESSING_SHARPENING)
             CASE(NOISE_FILTERING)
             CASE(INVALIDATION_BYPASS)
-            CASE(AMBIENT_LIGHT)
+            //CASE(AMBIENT_LIGHT) // Deprecated - replaced by "DIGITAL_GAIN" option
+            CASE(DIGITAL_GAIN)
             CASE(SENSOR_MODE)
             CASE(EMITTER_ALWAYS_ON)
             CASE(THERMAL_COMPENSATION)
             CASE(TRIGGER_CAMERA_ACCURACY_HEALTH)
             CASE(RESET_CAMERA_ACCURACY_HEALTH)
+            CASE(HOST_PERFORMANCE)
+            CASE(HDR_ENABLED)
+            CASE(SEQUENCE_NAME)
+            CASE(SEQUENCE_SIZE)
+            CASE(SEQUENCE_ID)
+            CASE(HUMIDITY_TEMPERATURE)
+            CASE(ENABLE_MAX_USABLE_RANGE)
+            case RS2_OPTION_ALTERNATE_IR:       return "Alternate IR";
+            CASE(NOISE_ESTIMATION)
+            case RS2_OPTION_ENABLE_IR_REFLECTIVITY: return "Enable IR Reflectivity";
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -533,6 +572,9 @@ namespace librealsense
             CASE(FRAME_LED_POWER)
             CASE(RAW_FRAME_SIZE)
             CASE(GPIO_INPUT_DATA)
+            CASE(SEQUENCE_NAME)
+            CASE(SEQUENCE_ID)
+            CASE(SEQUENCE_SIZE)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -600,6 +642,7 @@ namespace librealsense
         }
 #undef CASE
     }
+
     std::string firmware_version::to_string() const
     {
         if (is_any) return "any";

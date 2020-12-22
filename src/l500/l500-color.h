@@ -11,9 +11,11 @@
 #include "stream.h"
 #include "l500-depth.h"
 #include "calibrated-sensor.h"
+#include "algo/thermal-loop/l500-thermal-loop.h"
 
 namespace librealsense
 {
+
     class l500_color
         : public virtual l500_device
     {
@@ -36,11 +38,12 @@ namespace librealsense
 
         uint8_t _color_device_idx = -1;
 
-        lazy<std::vector<uint8_t>> _color_intrinsics_table_raw;
+        lazy<ivcam2::intrinsic_rgb> _color_intrinsics_table;
         lazy<std::vector<uint8_t>> _color_extrinsics_table_raw;
         std::shared_ptr<lazy<rs2_extrinsics>> _color_extrinsic;
+        lazy< algo::thermal_loop::l500::thermal_calibration_table > _thermal_table;
 
-        std::vector<uint8_t> get_raw_intrinsics_table() const;
+        ivcam2::intrinsic_rgb read_intrinsics_table() const;
         std::vector<uint8_t> get_raw_extrinsics_table() const;
     };
 
@@ -59,16 +62,23 @@ namespace librealsense
             : synthetic_sensor("RGB Camera", uvc_sensor, owner, l500_color_fourcc_to_rs2_format, l500_color_fourcc_to_rs2_stream),
             _owner(owner),
             _state(sensor_state::CLOSED)
-        {}
+        {
+        }
+        rs2_intrinsics get_raw_intrinsics( uint32_t width, uint32_t height ) const;
 
         rs2_intrinsics get_intrinsics( const stream_profile& profile ) const override;
-        
+
+
+
         // calibrated_sensor
         void override_intrinsics( rs2_intrinsics const& intr ) override;
         void override_extrinsics( rs2_extrinsics const& extr ) override;
         rs2_dsm_params get_dsm_params() const override;
         void override_dsm_params( rs2_dsm_params const & dsm_params ) override;
         void reset_calibration() override;
+        void set_k_thermal_intrinsics( rs2_intrinsics const & intr );
+        void reset_k_thermal_intrinsics(); 
+        algo::thermal_loop::l500::thermal_calibration_table get_thermal_table() const;
 
         stream_profiles init_stream_profiles() override
         {
@@ -129,11 +139,18 @@ namespace librealsense
        
         // Stops the color sensor if was opened by the calibration process, otherwise does nothing
         void stop_stream_for_calibration();
+
+        // Sets the calibration controls needed to be controlled calibration
+        void register_calibration_controls();
         
     private:
         l500_color* const _owner;
         action_delayer _action_delayer;
         std::mutex _state_mutex;
+
+        // Intrinsics from the the last successful AC( if there was one ) with k - thermal correction,
+        // We save it normalized such that it can be applied to each resolution
+        std::shared_ptr< rs2_intrinsics > _k_thermal_intrinsics;
 
         enum class sensor_state 
         {
@@ -142,6 +159,22 @@ namespace librealsense
             OWNED_BY_AUTO_CAL
         };
 
+
+        struct calibration_control
+        {
+            const rs2_option option;
+            const float default_value;
+            float previous_value;  
+            bool need_to_restore;
+
+            calibration_control(rs2_option opt, float def)
+                : option(opt)
+                , default_value(def)
+                , previous_value(0.0f)
+                , need_to_restore(false) {}
+        };
+
+        std::vector<calibration_control> _calib_controls;
         std::atomic< sensor_state > _state;
 
         void delayed_start(frame_callback_ptr callback)
@@ -169,6 +202,12 @@ namespace librealsense
                     " to: " << state_to_string(state));
                 _state = state;
         }
+
+
+        // For better results the CAH process require default values to some of the RGB sensor controls
+        // This functions handle the setting / restoring process of this controls
+        void set_calibration_controls_to_defaults();
+        void restore_pre_calibration_controls();
     };
 
 }

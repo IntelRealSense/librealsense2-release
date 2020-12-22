@@ -16,6 +16,7 @@ namespace librealsense
     public:
         virtual bool get_fw_log(fw_logs::fw_logs_binary_data& binary_data) = 0;
         virtual bool get_flash_log(fw_logs::fw_logs_binary_data& binary_data) = 0;
+        virtual unsigned int get_number_of_fw_logs() const = 0;
         virtual bool init_parser(std::string xml_content) = 0;
         virtual bool parse_log(const fw_logs::fw_logs_binary_data* fw_log_msg, fw_logs::fw_log_data* parsed_msg) = 0;
         virtual ~firmware_logger_extensions() = default;
@@ -25,12 +26,14 @@ namespace librealsense
     class firmware_logger_device : public virtual device, public firmware_logger_extensions
     {
     public:
-        firmware_logger_device(std::shared_ptr<context> ctx, const platform::backend_device_group group, 
+        firmware_logger_device(std::shared_ptr<context> ctx, const platform::backend_device_group group,
             std::shared_ptr<hw_monitor> hardware_monitor,
             const command& fw_logs_command, const command& flash_logs_command);
 
         bool get_fw_log(fw_logs::fw_logs_binary_data& binary_data) override;
         bool get_flash_log(fw_logs::fw_logs_binary_data& binary_data) override;
+        
+        unsigned int get_number_of_fw_logs() const override;
 
         bool init_parser(std::string xml_content) override;
         bool parse_log(const fw_logs::fw_logs_binary_data* fw_log_msg, fw_logs::fw_log_data* parsed_msg) override;
