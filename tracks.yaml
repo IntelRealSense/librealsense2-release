@@ -25,7 +25,7 @@ tracks:
     ros_distro: eloquent
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.38.1
+    version: 2.40.0
   kinetic:
     actions:
     - bloom-export-upstream :{vcs_local_uri} :{vcs_type} --tag :{release_tag} --display-uri
