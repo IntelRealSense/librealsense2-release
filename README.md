@@ -1,3 +1,26 @@
+## librealsense2 (eloquent) - 2.41.0-1
+
+The packages in the `librealsense2` repository were released into the `eloquent` distro by running `/usr/bin/bloom-release --ros-distro eloquent --track eloquent librealsense2 --edit` on `Thu, 31 Dec 2020 07:38:46 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: https://github.com/IntelRealSense/librealsense2-release.git
+- rosdistro version: `2.38.1-4`
+- old version: `2.40.0-1`
+- new version: `2.41.0-1`
+
+Versions of tools used:
+
+- bloom version: `0.10.0`
+- catkin_pkg version: `0.4.22`
+- rosdep version: `0.19.0`
+- rosdistro version: `0.8.2`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (foxy) - 2.41.0-1
 
 The packages in the `librealsense2` repository were released into the `foxy` distro by running `/usr/bin/bloom-release --ros-distro foxy --track foxy librealsense2 --new-track` on `Mon, 28 Dec 2020 22:11:49 -0000`
