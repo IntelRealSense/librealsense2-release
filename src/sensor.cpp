@@ -190,17 +190,21 @@ namespace librealsense
         _source_owner = owner;
     }
 
-    stream_profiles sensor_base::get_stream_profiles(int tag) const
+    stream_profiles sensor_base::get_stream_profiles( int tag ) const
     {
-        if (tag == profile_tag::PROFILE_TAG_ANY)
-            return *_profiles;
-
         stream_profiles results;
-        for (auto p : *_profiles)
+        bool const need_debug = tag & profile_tag::PROFILE_TAG_DEBUG;
+        bool const need_any = tag & profile_tag::PROFILE_TAG_ANY;
+        for( auto p : *_profiles )
         {
             auto curr_tag = p->get_tag();
-            if (curr_tag & tag)
-                results.push_back(p);
+            if( ! need_debug && ( curr_tag & profile_tag::PROFILE_TAG_DEBUG ) )
+                continue;
+
+            if( curr_tag & tag || need_any )
+            {
+                results.push_back( p );
+            }
         }
 
         return results;
@@ -262,7 +266,7 @@ namespace librealsense
             last_timestamp,
             last_frame_number,
             false,
-            fo.frame_size);
+            (uint32_t)fo.frame_size );
         fr->additional_data = additional_data;
 
         // update additional data
@@ -355,6 +359,10 @@ namespace librealsense
                     int height = vsp ? vsp->get_height() : 0;
 
                     frame_holder fh = _source.alloc_frame(stream_to_frame_types(req_profile_base->get_stream_type()), width * height * bpp / 8, fr->additional_data, requires_processing);
+                    auto diff = environment::get_instance().get_time_service()->get_time() - system_time;
+                    if (diff >10 )
+                        LOG_DEBUG("!! Frame allocation took " << diff << " msec");
+
                     if (fh.frame)
                     {
                         memcpy((void*)fh->get_frame_data(), fr->data.data(), sizeof(byte)*fr->data.size());
@@ -369,6 +377,9 @@ namespace librealsense
                         return;
                     }
 
+                    diff = environment::get_instance().get_time_service()->get_time() - system_time;
+                    if (diff >10 )
+                        LOG_DEBUG("!! Frame memcpy took " << diff << " msec");
                     if (!requires_processing)
                     {
                         fh->attach_continuation(std::move(release_and_enqueue));
@@ -548,7 +559,6 @@ namespace librealsense
         std::unordered_set<std::shared_ptr<video_stream_profile>> profiles;
         power on(std::dynamic_pointer_cast<uvc_sensor>(shared_from_this()));
 
-        if (_uvc_profiles.empty()) {}
         _uvc_profiles = _device->get_profiles();
 
         for (auto&& p : _uvc_profiles)
@@ -1210,7 +1220,7 @@ namespace librealsense
     stream_profiles synthetic_sensor::init_stream_profiles()
     {
         stream_profiles result_profiles;
-        auto profiles = _raw_sensor->get_stream_profiles();
+        auto profiles = _raw_sensor->get_stream_profiles( PROFILE_TAG_ANY | PROFILE_TAG_DEBUG );
 
         for (auto&& pbf : _pb_factories)
         {
@@ -1290,13 +1300,13 @@ namespace librealsense
         for (auto&& pbf : _pb_factories)
         {
             auto satisfied_req = pbf->find_satisfied_requests(requests, _pbf_supported_profiles[pbf.get()]);
-            satisfied_count = satisfied_req.size();
+            satisfied_count = (int)satisfied_req.size();
             if (satisfied_count > max_satisfied_req
                 || (satisfied_count == max_satisfied_req
                     && pbf->get_source_info().size() < best_source_size))
             {
                 max_satisfied_req = satisfied_count;
-                best_source_size = pbf->get_source_info().size();
+                best_source_size = (int)pbf->get_source_info().size();
                 best_match_processing_block_factory = pbf;
                 best_match_requests = satisfied_req;
             }
