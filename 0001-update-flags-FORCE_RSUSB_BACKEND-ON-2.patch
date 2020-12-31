@@ -1,4 +1,4 @@
-From 9158157dbb97092020f15f6e8f095177b4ef60c5 Mon Sep 17 00:00:00 2001
+From 13dc14cfb261c65db14e8d16eacb7b0e6c0dc112 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Thu, 25 Jun 2020 02:26:56 -0700
 Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
@@ -11,7 +11,7 @@ Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
 diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
 old mode 100644
 new mode 100755
-index 4f1d794..3f7aa32
+index 9ff68ad..c9c182a
 --- a/CMake/lrs_options.cmake
 +++ b/CMake/lrs_options.cmake
 @@ -1,4 +1,4 @@
@@ -20,7 +20,7 @@ index 4f1d794..3f7aa32
  option(BUILD_WITH_CUDA "Enable CUDA" OFF)
  option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples and tools. Implies BUILD_GLSL_EXTENSIONS" ON)
  option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
-@@ -11,7 +11,7 @@ option(HWM_OVER_XU "Send HWM commands over UVC XU control" ON)
+@@ -12,7 +12,7 @@ option(COM_MULTITHREADED "Set OFF to initialize COM library with COINIT_APARTMEN
  option(BUILD_SHARED_LIBS "Build shared library" ON)
  option(BUILD_UNIT_TESTS "Build realsense unit tests. Note that when enabled, additional tests data set will be downloaded from a web server and stored in a temp directory" OFF)
  option(BUILD_INTERNAL_UNIT_TESTS "Test package for components under librealsense namespace, requires BUILD_SHARED_LIBS=OFF and BUILD_UNIT_TESTS=ON" OFF)
@@ -29,7 +29,7 @@ index 4f1d794..3f7aa32
  option(ENFORCE_METADATA "Require WinSDK with Metadata support during compilation. Windows OS Only" OFF)
  option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
  option(BUILD_PYTHON_DOCS "Build Documentation for Python bindings" OFF)
-@@ -26,7 +26,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
+@@ -27,7 +27,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
  option(BUILD_OPENNI2_BINDINGS "Build OpenNI bindings" OFF)
  option(IMPORT_DEPTH_CAM_FW "Download the latest firmware for the depth cameras" ON)
  option(BUILD_CV_KINFU_EXAMPLE "Build OpenCV KinectFusion example" OFF)
