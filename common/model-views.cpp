@@ -1391,6 +1391,11 @@ namespace rs2
                             }
                             catch (...) {}
                         }
+                        else
+                        {
+                            error_message = to_string() << "Resolution " << width << "x" << height
+                                                        << " is not supported on this device";
+                        }
                     }
                     else
                     {
@@ -2157,7 +2162,8 @@ namespace rs2
 
     stream_model::stream_model()
         : texture(std::unique_ptr<texture_buffer>(new texture_buffer())),
-        _stream_not_alive(std::chrono::milliseconds(1500))
+        _stream_not_alive(std::chrono::milliseconds(1500)),
+        _stabilized_reflectivity(10)
     {
         show_map_ruler = config_file::instance().get_or_default(
             configurations::viewer::show_map_ruler, true);
@@ -2350,7 +2356,9 @@ namespace rs2
                 try
                 {
                     auto pixel_ref = _reflectivity->get_reflectivity( noise_est, max_usable_range, ir_val );
-                    ref_str = to_string() << std::dec << round( pixel_ref * 100 ) << "%";
+                    _stabilized_reflectivity.add( pixel_ref );
+                    auto stabilized_pixel_ref = _stabilized_reflectivity.get( 0.75f );
+                    ref_str = to_string() << std::dec << round( stabilized_pixel_ref * 100 ) << "%";
                 }
                 catch( ... )
                 {
@@ -3165,6 +3173,7 @@ namespace rs2
             if (_reflectivity)
             {
                 _reflectivity->reset_history();
+                _stabilized_reflectivity.clear();
             }
         }
     }
@@ -5080,7 +5089,6 @@ namespace rs2
                 }
             }
 
-
             if (_allow_remove)
             {
                 something_to_show = true;
@@ -5186,9 +5194,7 @@ namespace rs2
                     }
                 }
             }
-
-
-                
+            
             bool has_autocalib = false;
             for (auto&& sub : subdevices)
             {
@@ -5200,8 +5206,7 @@ namespace rs2
                         try
                         {
                             auto manager = std::make_shared<on_chip_calib_manager>(viewer, sub, *this, dev);
-                            auto n = std::make_shared<autocalib_notification_model>(
-                                "", manager, false);
+                            auto n = std::make_shared<autocalib_notification_model>("", manager, false);
 
                             viewer.not_model->add_notification(n);
                             n->forced = true;
@@ -5210,6 +5215,8 @@ namespace rs2
                             for (auto&& n : related_notifications)
                                 if (dynamic_cast<autocalib_notification_model*>(n.get()))
                                     n->dismiss(false);
+
+                            related_notifications.push_back(n);
                         }
                         catch (const error& e)
                         {
@@ -5243,6 +5250,8 @@ namespace rs2
                             for (auto&& n : related_notifications)
                                 if (dynamic_cast<autocalib_notification_model*>(n.get()))
                                     n->dismiss(false);
+
+                            related_notifications.push_back(n);
                         }
                         catch (const error& e)
                         {
@@ -5255,9 +5264,9 @@ namespace rs2
                     }
                     if (ImGui::IsItemHovered())
                         ImGui::SetTooltip("Tare calibration is used to adjust camera absolute distance to flat target.\n"
-                            "User needs to enter the known ground truth");
+                            "User needs either to enter the known ground truth or use the get button\n"
+                            "with specific target to get the ground truth.");
 
-                    
                     if (_calib_model.supports())
                     {
                         if (ImGui::Selectable("Calibration Data"))
