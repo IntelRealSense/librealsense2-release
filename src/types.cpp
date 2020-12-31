@@ -324,6 +324,7 @@ namespace librealsense
             CASE(SEQUENCE_ID_FILTER)
             CASE(HDR_MERGE)
             CASE(MAX_USABLE_RANGE_SENSOR)
+            CASE(DEBUG_STREAM_SENSOR)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -489,6 +490,7 @@ namespace librealsense
             CASE(INVI)
             CASE(W10)
             CASE(Z16H)
+            CASE(FG)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
