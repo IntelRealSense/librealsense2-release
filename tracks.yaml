@@ -25,7 +25,7 @@ tracks:
     ros_distro: eloquent
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.40.0
+    version: 2.41.0
   foxy:
     actions:
     - bloom-export-upstream :{vcs_local_uri} :{vcs_type} --tag :{release_tag} --display-uri
