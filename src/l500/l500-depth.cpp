@@ -168,13 +168,13 @@ namespace librealsense
 
         bool usb3mode = (_usb_mode >= platform::usb3_type || _usb_mode == platform::usb_undefined);
 
-        uint32_t width = usb3mode ? 640 : 320;
-        uint32_t height = usb3mode ? 480 : 240;
+        int width = usb3mode ? 640 : 320;
+        int height = usb3mode ? 480 : 240;
 
         tags.push_back({ RS2_STREAM_DEPTH, -1, width, height, RS2_FORMAT_Z16, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
         tags.push_back({ RS2_STREAM_INFRARED, -1, width, height, RS2_FORMAT_Y8, 30, profile_tag::PROFILE_TAG_SUPERSET | profile_tag::PROFILE_TAG_DEFAULT });
         tags.push_back({ RS2_STREAM_CONFIDENCE, -1, width, height, RS2_FORMAT_RAW8, 30, profile_tag::PROFILE_TAG_SUPERSET });
-        
+        tags.push_back({ RS2_STREAM_DEPTH, -1, -1, -1, RS2_FORMAT_FG, -1, profile_tag::PROFILE_TAG_DEBUG } );
         return tags;
     }
 
@@ -377,6 +377,11 @@ namespace librealsense
        float noise_estimation = static_cast<float>(_owner->get_temperatures().nest_avg);
 
        return l500::max_usable_range(noise_estimation);
+    }
+
+    stream_profiles l500_depth_sensor::get_debug_stream_profiles() const
+    {
+       return get_stream_profiles( PROFILE_TAG_DEBUG );
     }
 
     // We want to disable max-usable-range when not in a particular preset:
@@ -661,11 +666,19 @@ namespace librealsense
                                 } )
                != requests.end();
 
+            auto is_ir_needed
+                = std::find_if( requests.begin(),
+                                requests.end(),
+                                []( std::shared_ptr< stream_profile_interface > const & sp ) {
+                                    return sp->get_format() != RS2_FORMAT_FG;
+                                } )
+               != requests.end();
+
             _validator_requests = requests;
 
             // Enable IR stream if user didn't asked for IR
             // IR stream improves depth frames
-            if (!is_ir_requested)
+            if( ! is_ir_requested && is_ir_needed )
             {
                 auto user_request = std::find_if(requests.begin(), requests.end(), [](std::shared_ptr<stream_profile_interface> sp)
                 {return sp->get_stream_type() != RS2_STREAM_INFRARED;});
@@ -709,8 +722,8 @@ namespace librealsense
                                 << get_resolution_from_width_height(vs->get_width(), vs->get_height())<<")");
                     }
                 }
-                
-                sensor_mode_option.set(float(get_resolution_from_width_height(vs->get_width(), vs->get_height())));
+                if( vs->get_format() == RS2_FORMAT_Z16 )
+                    sensor_mode_option.set(float(get_resolution_from_width_height(vs->get_width(), vs->get_height())));
             }
 
             synthetic_sensor::open(_validator_requests);
