@@ -28,8 +28,9 @@
 #include "updates-model.h"
 #include "calibration-model.h"
 #include "cah-model.h"
-#include "../common/utilities/time/periodic_timer.h"
+#include <utilities/time/periodic_timer.h>
 #include "reflectivity/reflectivity.h"
+#include <utilities/number/stabilized-value.h>
 
 ImVec4 from_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a, bool consistent_color = false);
 ImVec4 operator+(const ImVec4& c, float v);
@@ -145,6 +146,8 @@ namespace rs2
         {
             static const char* is_3d_view          { "viewer_model.is_3d_view" };
             static const char* ground_truth_r      { "viewer_model.ground_truth_r" };
+            static const char* target_width_r      { "viewer_model.target_width_r" };
+            static const char* target_height_r     { "viewer_model.target_height_r" };
             static const char* continue_with_ui_not_aligned { "viewer_model.continue_with_ui_not_aligned" };
             static const char* continue_with_current_fw{ "viewer_model.continue_with_current_fw" };
             static const char* settings_tab        { "viewer_model.settings_tab" };
@@ -677,7 +680,6 @@ namespace rs2
     void outline_rect(const rect& r);
     void draw_rect(const rect& r, int line_width = 1);
 
-
     class stream_model
     {
     public:
@@ -735,6 +737,7 @@ namespace rs2
 
     private:
         std::unique_ptr< reflectivity > _reflectivity; 
+        utilities::number::stabilized_value<float> _stabilized_reflectivity;
 
     };
 
