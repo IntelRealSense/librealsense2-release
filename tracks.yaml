@@ -133,4 +133,4 @@ tracks:
     ros_distro: noetic
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.40.0
+    version: 2.41.0
