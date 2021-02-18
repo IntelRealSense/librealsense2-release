@@ -58,7 +58,7 @@ matrix:
       env: RS_CPP_TEST=true
       script:
         - cmake .. -DBUILD_UNIT_TESTS=true -DBUILD_EXAMPLES=false -DBUILD_WITH_TM2=false -DCHECK_FOR_UPDATES=true
-        - cmake --build . --config $LRS_RUN_CONFIG -- -j$(($(nproc)-1))
+        - cmake --build . --config $LRS_RUN_CONFIG -- -j4
         - ./unit-tests/live-test -d yes -i [software-device]
         - for i in ./records/single_cam/*; do ./unit-tests/live-test -d yes -i ~[multicam] from "$i"; done
         - for i in ./records/multi_cam/*; do ./unit-tests/live-test -d yes -i [multicam] from "$i"; done
@@ -71,8 +71,8 @@ matrix:
       script:
         - cd ../scripts && ./pr_check.sh && cd ../build
         - cmake .. -DBUILD_UNIT_TESTS=true -DBUILD_EXAMPLES=true -DBUILD_WITH_TM2=true -DBUILD_SHARED_LIBS=false -DCHECK_FOR_UPDATES=true -DBUILD_PYTHON_BINDINGS=true -DPYBIND11_PYTHON_VERSION=3.5
-        - cmake --build . --config $LRS_BUILD_CONFIG -- -j$(($(nproc)-1))
-        - python3 ../unit-tests/run-unit-tests.py --verbose .
+        - cmake --build . --config $LRS_BUILD_CONFIG -- -j4
+        # python3 ../unit-tests/run-unit-tests.py --verbose .
 
     - name: "Linux - python & nodejs"
       os: linux
@@ -85,11 +85,11 @@ matrix:
       script:
         - python ../wrappers/nodejs/tools/enums.py -i ../include/librealsense2 -a ../wrappers/nodejs/src -v
         - cmake .. -DBUILD_PYTHON_BINDINGS=true -DBUILD_NODEJS_BINDINGS=true -DPYBIND11_PYTHON_VERSION=2.7 -DCHECK_FOR_UPDATES=true
-        - cmake --build . --config $LRS_BUILD_CONFIG -- -j$(($(nproc)-1))
+        - cmake --build . --config $LRS_BUILD_CONFIG -- -j4
         - cd ../wrappers/nodejs/
         - npm install
         - cd test
-        - wget http://realsense-hw-public.s3.amazonaws.com/rs-tests/nodejs_records.rec
+        - wget https://librealsense.intel.com/rs-tests/nodejs_records.rec
 
     - name: "Mac - cpp"
       os: osx
@@ -98,7 +98,7 @@ matrix:
       osx_image: xcode7
       script:
         - cmake .. -DBUILD_EXAMPLES=true -DBUILD_WITH_OPENMP=false -DHWM_OVER_XU=false -DCHECK_FOR_UPDATES=true
-        - cmake --build . --config $LRS_BUILD_CONFIG -- -j$(($(nproc)-1))
+        - cmake --build . --config $LRS_BUILD_CONFIG -- -j4
         - ls
 
     - name: "Android - cpp"
@@ -109,7 +109,7 @@ matrix:
       env: LRS_BUILD_ANDROID=true
       script:
         - cmake .. -DCMAKE_TOOLCHAIN_FILE=../android-ndk-r20b/build/cmake/android.toolchain.cmake  -DCHECK_FOR_UPDATES=true
-        - cmake --build . --config $LRS_BUILD_CONFIG -- -j$(($(nproc)-1))
+        - cmake --build . --config $LRS_BUILD_CONFIG -- -j4
         - ls
 
 before_install:
@@ -132,7 +132,7 @@ before_install:
   - mkdir build && cd build
   - if [[ "$RS_CPP_TEST" == "true" ]]; then
       export LRS_LOG_LEVEL="DEBUG";
-      url_records_path="http://realsense-hw-public.s3.amazonaws.com/rs-tests/lrs_2.8.3/";
+      url_records_path="https://librealsense.intel.com/rs-tests/lrs_2.8.3/";
       records_name="records_test.txt";
       url_records_list=$url_records_path$records_name;
       wget $url_records_path$records_name;
