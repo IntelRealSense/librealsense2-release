@@ -1,3 +1,26 @@
+## librealsense2 (melodic) - 2.42.0-1
+
+The packages in the `librealsense2` repository were released into the `melodic` distro by running `/usr/bin/bloom-release --ros-distro melodic --track melodic librealsense2 --edit` on `Thu, 18 Feb 2021 11:33:28 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: https://github.com/IntelRealSense/librealsense2-release.git
+- rosdistro version: `2.41.0-1`
+- old version: `2.41.0-1`
+- new version: `2.42.0-1`
+
+Versions of tools used:
+
+- bloom version: `0.10.1`
+- catkin_pkg version: `0.4.22`
+- rosdep version: `0.20.0`
+- rosdistro version: `0.8.2`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (kinetic) - 2.42.0-1
 
 The packages in the `librealsense2` repository were released into the `kinetic` distro by running `/usr/bin/bloom-release --ros-distro kinetic --track kinetic librealsense2 --edit` on `Thu, 18 Feb 2021 11:24:23 -0000`
