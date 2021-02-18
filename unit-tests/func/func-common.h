@@ -3,6 +3,8 @@
 
 #include "../test.h"
 #include "librealsense2/rs.hpp"
+#include <condition_variable>
+#include "hw-monitor.h"
 
 using namespace rs2;
 
@@ -18,6 +20,19 @@ inline rs2::device_list find_devices_by_product_line_or_exit( int product )
     }
 
     return devices_list;
+}
+
+inline void exit_if_fw_version_is_under( rs2::device & dev, librealsense::firmware_version version )
+{
+    std::string fw_version;
+    REQUIRE_NOTHROW(fw_version = dev.get_info( RS2_CAMERA_INFO_FIRMWARE_VERSION ));
+
+    if (librealsense::firmware_version(fw_version) < version)
+    {
+        std::cout << "FW version " << fw_version << " is under the minimum requiered FW version "
+                  << version << std::endl;
+        exit( 0 );
+    }
 }
 
 // Remove the frame's stream (or streams if a frameset) from the list of streams we expect to arrive
@@ -76,6 +91,34 @@ inline stream_profile find_default_ir_profile( rs2::depth_sensor depth_sens )
     return *ir_profile;
 }
 
+inline stream_profile
+find_profile( rs2::depth_sensor depth_sens, rs2_stream stream, rs2_sensor_mode mode )
+{
+    std::vector< stream_profile > stream_profiles;
+    REQUIRE_NOTHROW( stream_profiles = depth_sens.get_stream_profiles() );
+
+    std::map< rs2_sensor_mode, std::pair< uint32_t, uint32_t > > sensor_mode_to_resolution
+        = { { { RS2_SENSOR_MODE_VGA }, { 640, 480 } },
+            { { RS2_SENSOR_MODE_XGA }, { 1024, 768 } },
+            { { RS2_SENSOR_MODE_QVGA }, { 320, 240 } } };
+
+
+    auto profile
+        = std::find_if( stream_profiles.begin(), stream_profiles.end(), [&]( stream_profile sp ) {
+              auto vp = sp.as< video_stream_profile >();
+              if( vp )
+              {
+                  return sp.stream_type() == stream
+                      && vp.width() == sensor_mode_to_resolution[mode].first
+                      && vp.height() == sensor_mode_to_resolution[mode].second;
+              }
+              return false;
+          } );
+
+    REQUIRE( profile != stream_profiles.end() );
+    return *profile;
+}
+
 inline stream_profile find_confidence_corresponding_to_depth( rs2::depth_sensor depth_sens,
                                                        stream_profile depth_profile )
 {
@@ -93,4 +136,17 @@ inline stream_profile find_confidence_corresponding_to_depth( rs2::depth_sensor 
 
     REQUIRE( confidence_profile != stream_profiles.end() );
     return *confidence_profile;
+}
+
+inline void do_while_streaming( rs2::sensor depth_sens,
+                                std::vector< stream_profile > profiles,
+                                std::function< void() > action )
+{
+    REQUIRE_NOTHROW( depth_sens.open( profiles ) );
+    REQUIRE_NOTHROW( depth_sens.start( [&]( rs2::frame f ) {} ) );
+
+    action();
+
+    depth_sens.stop();
+    depth_sens.close();
 }
