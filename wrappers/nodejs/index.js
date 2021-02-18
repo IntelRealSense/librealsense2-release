@@ -4656,8 +4656,8 @@ const option = {
   option_stream_format_filter: 'stream-format-filter',
   option_stream_index_filter: 'stream-index-filter',
   option_emitter_on_off: 'emitter-on-off',
-  option_zero_order_point_x: 'zero-order-point-x',
-  option_zero_order_point_y: 'zero-order-point-y',
+  option_zero_order_point_x: 'zero-order-point-x', /* Deprecated */
+  option_zero_order_point_y: 'zero-order-point-y', /* Deprecated */
   option_lld_temperature: 'lld-temperature',
   option_mc_temperature: 'mc-temperature',
   option_ma_temperature: 'ma-temperature',
@@ -4670,7 +4670,7 @@ const option = {
   option_enable_dynamic_calibration: 'enable-dynamic-calibration',
   option_depth_offset: 'depth-offset',
   option_led_power: 'led-power',
-  option_zero_order_enabled: 'zero-order-enabled',
+  option_zero_order_enabled: 'zero-order-enabled', /* Deprecated */
   option_enable_map_preservation: 'enable-map-preservation',
   /**
    * Enable / disable color backlight compensatio.<br>Equivalent to its lowercase counterpart.
@@ -4959,6 +4959,16 @@ const option = {
   OPTION_ALTERNATE_IR: RS2.RS2_OPTION_ALTERNATE_IR,
   OPTION_NOISE_ESTIMATION: RS2.RS2_OPTION_NOISE_ESTIMATION,
   OPTION_ENABLE_IR_REFLECTIVITY: RS2.RS2_OPTION_ENABLE_IR_REFLECTIVITY,
+  /**
+   * Set or get auto exposure limit in microsecond.
+   * @type {Integer}
+   */
+  OPTION_AUTO_EXPOSURE_LIMIT: RS2.RS2_OPTION_AUTO_EXPOSURE_LIMIT,
+  /**
+   * Set or get auto gain limit.
+   * @type {Integer}
+   */
+  OPTION_AUTO_GAIN_LIMIT: RS2.RS2_OPTION_AUTO_GAIN_LIMIT,
   /**
    * Number of enumeration values. Not a valid input: intended to be used in for-loops.
    * @type {Integer}

@@ -198,11 +198,11 @@ namespace librealsense
 
         sector_count += first_sector;
 
-        for (int sector_index = first_sector; sector_index < sector_count; sector_index++)
+        for (auto sector_index = first_sector; sector_index < sector_count; sector_index++)
         {
             command cmdFES(ds::FES);
             cmdFES.require_response = false;
-            cmdFES.param1 = sector_index;
+            cmdFES.param1 = (int)sector_index;
             cmdFES.param2 = 1;
             auto res = hwm->send(cmdFES);
 
@@ -214,7 +214,7 @@ namespace librealsense
                 int packet_size = std::min((int)(HW_MONITOR_COMMAND_SIZE - (i % HW_MONITOR_COMMAND_SIZE)), (int)(ds::FLASH_SECTOR_SIZE - i));
                 command cmdFWB(ds::FWB);
                 cmdFWB.require_response = false;
-                cmdFWB.param1 = index;
+                cmdFWB.param1 = (int)index;
                 cmdFWB.param2 = packet_size;
                 cmdFWB.data.assign(image.data() + index, image.data() + index + packet_size);
                 res = hwm->send(cmdFWB);
@@ -536,15 +536,16 @@ namespace librealsense
         if (gvd_buf[imu_sensor])
         {
             val |= d400_caps::CAP_IMU_SENSOR;
-            if (hid_bmi_055_pid.end() != hid_bmi_055_pid.find(pid))
+            if (gvd_buf[imu_acc_chip_id] == I2C_IMU_BMI055_ID_ACC)
                 val |= d400_caps::CAP_BMI_055;
+            else if (gvd_buf[imu_acc_chip_id] == I2C_IMU_BMI085_ID_ACC)
+                val |= d400_caps::CAP_BMI_085;
+            else if (hid_bmi_055_pid.end() != hid_bmi_055_pid.find(pid))
+                val |= d400_caps::CAP_BMI_055;
+            else if (hid_bmi_085_pid.end() != hid_bmi_085_pid.find(pid))
+                val |= d400_caps::CAP_BMI_085;
             else
-            {
-                if (hid_bmi_085_pid.end() != hid_bmi_085_pid.find(pid))
-                    val |= d400_caps::CAP_BMI_085;
-                else
-                    LOG_WARNING("The IMU sensor is undefined for PID " << std::hex << pid << std::dec);
-            }
+                LOG_WARNING("The IMU sensor is undefined for PID " << std::hex << pid << " and imu_chip_id: " << gvd_buf[imu_acc_chip_id] << std::dec);
         }
         if (0xFF != (gvd_buf[fisheye_sensor_lb] & gvd_buf[fisheye_sensor_hb]))
             val |= d400_caps::CAP_FISHEYE_SENSOR;
@@ -932,6 +933,13 @@ namespace librealsense
                 lazy<float>([]() { return 0.001f; })));
         // Metadata registration
         depth_sensor.register_metadata(RS2_FRAME_METADATA_FRAME_TIMESTAMP, make_uvc_header_parser(&uvc_header::timestamp));
+
+        // Auto exposure and gain limit
+        if (_fw_version >= firmware_version("5.12.10.11"))
+        {
+            depth_sensor.register_option(RS2_OPTION_AUTO_EXPOSURE_LIMIT, std::make_shared<auto_exposure_limit_option>(*_hw_monitor, &depth_sensor));
+            depth_sensor.register_option(RS2_OPTION_AUTO_GAIN_LIMIT, std::make_shared<auto_gain_limit_option>(*_hw_monitor, &depth_sensor));
+        }
 
         // attributes of md_capture_timing
         auto md_prop_offset = offsetof(metadata_raw, mode) +
