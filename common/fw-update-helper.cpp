@@ -29,7 +29,7 @@ const char* fw_get_L5XX_FW_Image(int) { return NULL; }
 
 #endif // INTERNAL_FW
 
-constexpr const char* recommended_fw_url = "https://dev.intelrealsense.com/docs/firmware-releases";
+constexpr const char* recommended_fw_url = "https://dev.intelrealsense.com/docs/firmware-updates";
 
 namespace rs2
 {
@@ -233,6 +233,8 @@ namespace rs2
             {
                 log("Requesting to switch to recovery mode");
                 upd.enter_update_state();
+                // Allow time for the device to disconnect before calling "query_devices"
+                std::this_thread::sleep_for(std::chrono::seconds(2));
 
                 if (!check_for([this, serial, &dfu]() {
                     auto devs = _ctx.query_devices();
@@ -255,9 +257,10 @@ namespace rs2
                             }
                         }
                         catch (std::exception &e) {
-                            std::stringstream s;
-                            s << "Exception caught in FW Update process-flow: " << e.what();
-                            log(s.str().c_str());
+                            _viewer.not_model->output.add_log( RS2_LOG_SEVERITY_WARN,
+                                __FILE__,
+                                __LINE__,
+                                to_string() << "Exception caught in FW Update process-flow: " << e.what() << "; Retrying..." );
                         }
                         catch (...) {}
                     }
