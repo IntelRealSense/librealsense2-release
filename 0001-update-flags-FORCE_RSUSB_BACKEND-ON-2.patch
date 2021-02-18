@@ -1,4 +1,4 @@
-From 93a9ac8fcf7cd307f6edf0c1777e469bb14e8f9e Mon Sep 17 00:00:00 2001
+From 2b1f0c774cd73473ed5c558912d454315f37eff4 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Wed, 24 Jun 2020 13:47:51 +0300
 Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
