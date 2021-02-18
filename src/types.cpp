@@ -451,6 +451,8 @@ namespace librealsense
             case RS2_OPTION_ALTERNATE_IR:       return "Alternate IR";
             CASE(NOISE_ESTIMATION)
             case RS2_OPTION_ENABLE_IR_REFLECTIVITY: return "Enable IR Reflectivity";
+            CASE(AUTO_EXPOSURE_LIMIT)
+            CASE(AUTO_GAIN_LIMIT)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
@@ -640,6 +642,7 @@ namespace librealsense
             case RS2_L500_VISUAL_PRESET_LOW_AMBIENT: return "Low Ambient Light";
             CASE(MAX_RANGE)
             CASE(SHORT_RANGE)
+            CASE(AUTOMATIC)
         default: assert(!is_valid(value)); return UNKNOWN_VALUE;
         }
 #undef CASE
