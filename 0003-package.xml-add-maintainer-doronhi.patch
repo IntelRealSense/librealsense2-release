@@ -1,4 +1,4 @@
-From 1f440f34d6981f23f8a61208dc3a9af922ccd600 Mon Sep 17 00:00:00 2001
+From d538d165e1fc8773fa1343250c4c0aaf21731458 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Mon, 5 Oct 2020 08:49:08 +0300
 Subject: [PATCH 3/3] package.xml: add maintainer:doronhi
@@ -20,5 +20,5 @@ index c69f754..576656e 100644
    <url type="website">https://github.com/IntelRealSense/librealsense/</url>
  
 -- 
-2.25.1
+2.7.4
 

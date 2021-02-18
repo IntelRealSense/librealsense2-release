@@ -1,4 +1,4 @@
-From 64c712842b5f89176b57d953c51615b01617d5df Mon Sep 17 00:00:00 2001
+From 6ce987ebe5e076b3967a00fa7dc33a8907d1c7b9 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Mon, 5 Oct 2020 08:32:37 +0300
 Subject: [PATCH 2/3] package.xml: catkin->ament_cmake
@@ -29,5 +29,5 @@ index affccc0..c69f754 100644
    </export>
  </package>
 -- 
-2.25.1
+2.7.4
 
