@@ -37,6 +37,10 @@ macro(global_set_flags)
         add_definitions(-DBUILD_EASYLOGGINGPP)
     endif()
 
+    if (ENABLE_EASYLOGGINGPP_ASYNC)
+        add_definitions(-DEASYLOGGINGPP_ASYNC)
+    endif()
+
     if(TRACE_API)
         add_definitions(-DTRACE_API)
     endif()
@@ -89,12 +93,11 @@ endmacro()
 macro(global_target_config)
     target_link_libraries(${LRS_TARGET} PRIVATE realsense-file ${CMAKE_THREAD_LIBS_INIT})
 
-    include_directories(${LRS_TARGET} src)
-
     set_target_properties (${LRS_TARGET} PROPERTIES FOLDER Library)
 
     target_include_directories(${LRS_TARGET}
         PRIVATE
+            src
             ${ROSBAG_HEADER_DIRS}
             ${BOOST_INCLUDE_PATH}
             ${LZ4_INCLUDE_PATH}
