@@ -1,4 +1,4 @@
-From 7b9d1b97c60e677d63a9db37152480a98145aa8b Mon Sep 17 00:00:00 2001
+From 29bc7f91a3df8e3ff796002f019de021e7f4410c Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Wed, 24 Jun 2020 13:47:51 +0300
 Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
@@ -39,5 +39,5 @@ index e68c12b..199028e
  option(FORCE_LIBUVC "Explicitly turn-on libuvc backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
  option(FORCE_WINUSB_UVC "Explicitly turn-on winusb_uvc (for win7) backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
 -- 
-2.25.1
+2.7.4
 
