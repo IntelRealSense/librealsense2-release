@@ -184,15 +184,26 @@ namespace librealsense
 
         std::vector<stream_interface*> streams = { _depth_stream.get(), _ir_stream.get(), _confidence_stream.get() };
 
+        // TODO
         for (auto& s : streams)
         {
             depth_matchers.push_back(std::make_shared<identity_matcher>(s->get_unique_id(), s->get_stream_type()));
         }
         std::vector<std::shared_ptr<matcher>> matchers;
-        matchers.push_back(std::make_shared<timestamp_composite_matcher>(depth_matchers));
+        if (!frame.frame->supports_frame_metadata(RS2_FRAME_METADATA_FRAME_COUNTER))
+        {
+            matchers.push_back(std::make_shared<timestamp_composite_matcher>(depth_matchers));
+        }
+        else
+        {
+            matchers.push_back(std::make_shared<timestamp_composite_matcher>(depth_matchers));
+        }
 
         return std::make_shared<timestamp_composite_matcher>(matchers);
     }
+
+   
+
 
     // If the user did not ask for IR, The open function will add it anyway. 
     // This class filters the IR frames is this case so they will not get to the user callback function
@@ -701,6 +712,16 @@ namespace librealsense
             {
                 auto&& sensor_mode_option = get_option(RS2_OPTION_SENSOR_MODE);
                 auto vs = dynamic_cast<video_stream_profile*>((*dp).get());
+                if (supports_option(RS2_OPTION_VISUAL_PRESET))
+                {
+                    auto&& preset_option = get_option(RS2_OPTION_VISUAL_PRESET);
+                    if (preset_option.query() == RS2_L500_VISUAL_PRESET_CUSTOM)
+                    {
+                        if(sensor_mode_option.query() != get_resolution_from_width_height(vs->get_width(), vs->get_height()))
+                            throw  std::runtime_error(to_string() << "sensor mode ("<< rs2_sensor_mode((int)sensor_mode_option.query())<<") with RS2_L500_VISUAL_PRESET_CUSTOM is incompatible with the requested profile resolution ("
+                                << get_resolution_from_width_height(vs->get_width(), vs->get_height())<<")");
+                    }
+                }
                 if( vs->get_format() == RS2_FORMAT_Z16 )
                     sensor_mode_option.set(float(get_resolution_from_width_height(vs->get_width(), vs->get_height())));
             }

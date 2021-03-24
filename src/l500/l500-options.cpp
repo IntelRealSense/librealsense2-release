@@ -241,8 +241,8 @@ namespace librealsense
                 ivcam2::L500_DIGITAL_GAIN,
                 "Change the depth digital gain to: 1 for high gain and 2 for low gain",
                 std::map< float, std::string >{ /*{ RS2_DIGITAL_GAIN_AUTO, "Auto Gain" },*/
-                                                { (float)(RS2_DIGITAL_GAIN_HIGH), "High Gain" },
-                                                { (float)(RS2_DIGITAL_GAIN_LOW), "Low Gain" } },
+                                                { RS2_DIGITAL_GAIN_HIGH, "High Gain" },
+                                                { RS2_DIGITAL_GAIN_LOW, "Low Gain" } },
                 _fw_version,
                 this );
 
@@ -603,7 +603,7 @@ namespace librealsense
 
     void l500_options::set_preset_value( rs2_l500_visual_preset preset ) 
     {
-        _preset->set_value( (float)preset );
+        _preset->set_value( preset );
     }
 
     void l500_options::set_preset_controls_to_defaults()
@@ -746,21 +746,18 @@ namespace librealsense
     {
         // Restrictions for sensor mode option as required on [RS5-8358]
         auto &ds = _l500_depth_dev->get_depth_sensor();
-
-        if( ds.supports_option( RS2_OPTION_ENABLE_IR_REFLECTIVITY )
-            && ds.get_option( RS2_OPTION_ENABLE_IR_REFLECTIVITY ).query() == 1.0f
-            && ( value != rs2_sensor_mode::RS2_SENSOR_MODE_VGA ) )
+        if (ds.supports_option(RS2_OPTION_ENABLE_IR_REFLECTIVITY) && ds.get_option(RS2_OPTION_ENABLE_IR_REFLECTIVITY).query() == 1.0f)
         {
-            ds.get_option( RS2_OPTION_ENABLE_IR_REFLECTIVITY ).set( 0.0f );
-            LOG_INFO( "IR Reflectivity was on - turning it off" );
+            ds.get_option(RS2_OPTION_ENABLE_IR_REFLECTIVITY).set(0.0f);
+            LOG_INFO("IR Reflectivity was on - turning it off");
         }
 
-        if( ds.supports_option( RS2_OPTION_ENABLE_MAX_USABLE_RANGE )
-            && ( ds.get_option( RS2_OPTION_ENABLE_MAX_USABLE_RANGE ).query() == 1.0 )
-            && ( value != rs2_sensor_mode::RS2_SENSOR_MODE_VGA ) )
+        if (ds.supports_option(RS2_OPTION_ENABLE_MAX_USABLE_RANGE) &&
+            (ds.get_option(RS2_OPTION_ENABLE_MAX_USABLE_RANGE).query() == 1.0) &&
+            (value != rs2_sensor_mode::RS2_SENSOR_MODE_VGA))
         {
-            ds.get_option( RS2_OPTION_ENABLE_MAX_USABLE_RANGE ).set( 0.0f );
-            LOG_INFO( "Max Usable Range was on - turning it off" );
+            ds.get_option(RS2_OPTION_ENABLE_MAX_USABLE_RANGE).set(0.0f);
+            LOG_INFO("Max Usable Range was on - turning it off");
         }
 
         float_option_with_description::set(value);
@@ -774,7 +771,7 @@ namespace librealsense
                "ambient light in the scene.\n"
                "For example, if Max Usable Range returns 5m, this means that the ambient light in "
                "the scene is reducing the maximum range from 9m down to 5m.\n"
-               "Values are between 1.5 and 9 meters, in 1.5m increments. "
+               "Values are rounded to whole meter values and are between 3 meters and 9 meters. "
                "Max range refers to the center 10% of the frame.";
     }
 

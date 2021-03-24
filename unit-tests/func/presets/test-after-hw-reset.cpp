@@ -2,7 +2,6 @@
 // Copyright(c) 2020 Intel Corporation. All Rights Reserved.
 
 //#cmake: static!
-//#test:device L500*
 
 #include "../func-common.h"
 #include "../reset-camera.h"

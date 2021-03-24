@@ -244,13 +244,6 @@ namespace rs2
             return intr;
         }
 
-        bool operator==(const video_stream_profile& other) const
-        {
-            return (((stream_profile&)*this)==other && 
-                    width() == other.width() &&
-                    height() == other.height());
-        }
-
         using stream_profile::clone;
 
         /**

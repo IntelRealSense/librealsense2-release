@@ -2,7 +2,9 @@
 // Copyright(c) 2019 Intel Corporation. All Rights Reserved.
 
 #include <librealsense2/rs.hpp>
-#include "example-imgui.hpp"
+#include "../example.hpp"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
 
 /*
  This example introduces the concept of spatial stream alignment.

@@ -73,8 +73,7 @@ void init_processing(py::module &m) {
         .def(BIND_DOWNCAST(filter, depth_huffman_decoder))
         .def(BIND_DOWNCAST(filter, hdr_merge))
         .def(BIND_DOWNCAST(filter, sequence_id_filter))
-        .def("__nonzero__", &rs2::filter::operator bool) // Called to implement truth value testing in Python 2
-        .def("__bool__", &rs2::filter::operator bool);   // Called to implement truth value testing in Python 3
+        .def("__nonzero__", &rs2::filter::operator bool); // No docstring in C++
         // get_queue?
         // is/as?
 

@@ -11,13 +11,13 @@
         android:layout_height="match_parent"
         android:id="@+id/glSurfaceView"/>
 
-    <androidx.appcompat.widget.LinearLayoutCompat
+    <android.support.v7.widget.LinearLayoutCompat
         android:id="@+id/buttonPanel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerVertical="true"
         android:layout_centerHorizontal="true">
-    </androidx.appcompat.widget.LinearLayoutCompat>
+    </android.support.v7.widget.LinearLayoutCompat>
 
 
 </RelativeLayout>

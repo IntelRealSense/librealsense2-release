@@ -9,9 +9,7 @@
 #include "yuy2rgb-gl.h"
 #include "option.h"
 
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 
 #include <glad/glad.h>
 

@@ -188,4 +188,3 @@ TEST_CASE("named_mutex_processes", "[code]")
         REQUIRE(child_alive == actual_test);
     }
 }
-

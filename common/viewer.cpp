@@ -946,7 +946,6 @@ namespace rs2
         , ctx( ctx_ )
         , frameset_alloc( this )
         , synchronization_enable( true )
-        , synchronization_enable_prev_state(true)
         , zo_sensors( 0 )
         , _support_ir_reflectivity( false )
     {
@@ -1623,7 +1622,7 @@ namespace rs2
         float inverse = 1.f / distances.size();
         for (auto elem : distances)
         {
-            e += static_cast<float>(pow(elem - mean, 2));
+            e += pow(elem - mean, 2);
         }
 
         auto standard_deviation = sqrt(inverse * e);
@@ -3194,11 +3193,11 @@ namespace rs2
         ppf.frames_queue.emplace(p.unique_id(), rs2::frame_queue(5));
     }
 
-    bool viewer_model::is_3d_texture_source(frame f) const
+    bool viewer_model::is_3d_texture_source(frame f)
     {
         auto profile = f.get_profile().as<video_stream_profile>();
         auto index = profile.unique_id();
-        auto mapped_index = streams_origin.at(index);
+        auto mapped_index = streams_origin[index];
 
         if (!is_rasterizeable(profile.format()))
             return false;

@@ -569,19 +569,18 @@ namespace rs2
         void release() override { delete this; }
     };
 
-    class calibration_change_device : public device
+    class device_calibration : public device
     {
     public:
-        calibration_change_device() = default;
-        calibration_change_device(device d)
-            : device(d.get())
+        device_calibration( device d )
+            : device( d.get() )
         {
             rs2_error* e = nullptr;
-            if( ! rs2_is_device_extendable_to( _dev.get(), RS2_EXTENSION_CALIBRATION_CHANGE_DEVICE, &e )  &&  ! e )
+            if( rs2_is_device_extendable_to( _dev.get(), RS2_EXTENSION_DEVICE_CALIBRATION, &e ) == 0 && !e )
             {
                 _dev.reset();
             }
-            error::handle(e);
+            error::handle( e );
         }
 
         /*
@@ -593,7 +592,7 @@ namespace rs2
                 })
         */
         template< typename T >
-        void register_calibration_change_callback(T callback)
+        void register_calibration_change_callback( T callback )
         {
             // We wrap the callback with an interface and pass it to librealsense, who will
             // now manage its lifetime. Rather than deleting it, though, it will call its
@@ -601,23 +600,8 @@ namespace rs2
             rs2_error* e = nullptr;
             rs2_register_calibration_change_callback_cpp(
                 _dev.get(),
-                new calibration_change_callback< T >(std::move(callback)),
-                &e);
-            error::handle(e);
-        }
-    };
-
-    class device_calibration : public calibration_change_device
-    {
-    public:
-        device_calibration() = default;
-        device_calibration( device d )
-        {
-            rs2_error* e = nullptr;
-            if( rs2_is_device_extendable_to( d.get().get(), RS2_EXTENSION_DEVICE_CALIBRATION, &e ))
-            {
-                _dev = d.get();
-            }
+                new calibration_change_callback< T >( std::move( callback )),
+                &e );
             error::handle( e );
         }
 

@@ -1,6 +1,6 @@
 package com.intel.realsense.camera;
 
-import androidx.annotation.NonNull;
+import android.support.annotation.NonNull;
 
 import com.intel.realsense.librealsense.Extension;
 import com.intel.realsense.librealsense.MotionStreamProfile;

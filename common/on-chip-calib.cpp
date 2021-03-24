@@ -2192,10 +2192,10 @@ namespace rs2
         if (rec_sides[3] > 0)
             rec_sides[3] = _target_fh / rec_sides[3];
 
-        ground_truth = 0.f;
+        ground_truth = 0.0;
         for (int i = 0; i < 4; ++i)
-            ground_truth += (float)(rec_sides[i]);
-        ground_truth /= 4.f;
+            ground_truth += rec_sides[i];
+        ground_truth /= 4.0;
     }
 
     void tare_ground_truth_calculator::minimize_x(const double* p, int s, double* f, double& x)

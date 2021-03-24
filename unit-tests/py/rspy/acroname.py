@@ -5,8 +5,6 @@ See documentation for brainstem here:
 https://acroname.com/reference/python/index.html
 """
 
-from rspy import log
-
 
 if __name__ == '__main__':
     import os, sys, getopt
@@ -31,59 +29,24 @@ if __name__ == '__main__':
 try:
     import brainstem
 except ModuleNotFoundError:
-    log.w( 'No acroname library is available!' )
+    print( '-E-', 'No acroname library is available!' )
     raise
 
 hub = None
 
 
-class NoneFoundError( RuntimeError ):
-    """
-    """
-    def __init__( self, message = None ):
-        super().__init__( self, message  or  'no Acroname module found' )
-
-
-def discover():
-    """
-    Return all Acroname module specs in a list. Raise NoneFoundError if one is not found!
-    """
-
-    log.d( 'discovering Acroname modules ...' )
-    # see https://acroname.com/reference/_modules/brainstem/module.html#Module.discoverAndConnect
-    try:
-        log.debug_indent()
-        specs = brainstem.discover.findAllModules( brainstem.link.Spec.USB )
-        if not specs:
-            raise NoneFoundError()
-        for spec in specs:
-            log.d( '...', spec )
-    finally:
-        log.debug_unindent()
-
-    return specs
-
-
-def connect( spec = None ):
+def connect():
     """
     Connect to the hub. Raises RuntimeError on failure
     """
-
+    
     global hub
     if not hub:
         hub = brainstem.stem.USBHub3p()
 
-    if spec:
-        specs = [spec]
-    else:
-        specs = discover()
-        spec = specs[0]
-
-    result = hub.connectFromSpec( spec )
+    result = hub.discoverAndConnect( brainstem.link.Spec.USB )
     if result != brainstem.result.Result.NO_ERROR:
         raise RuntimeError( "failed to connect to acroname (result={})".format( result ))
-    elif len(specs) > 1:
-        log.d( 'connected to', spec )
 
 
 def is_connected():

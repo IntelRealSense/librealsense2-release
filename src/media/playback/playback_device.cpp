@@ -507,16 +507,14 @@ void playback_device::do_loop(T action)
     });
 }
 
-// Called in real-time only
-// Return should indicate whether any frames are available: if there are, we need to sleep before proceeding
 bool playback_device::prefetch_done()
 {
     for (auto s : m_active_sensors)
     {
-        if (s.second->streams_contains_one_frame_or_more())
-            return true;
+        if (!s.second->streams_contains_one_frame_or_more())
+            return false;
     }
-    return false;
+    return true;
 }
 
 void playback_device::try_looping()
@@ -581,7 +579,7 @@ void playback_device::try_looping()
                 LOG_ERROR(error_msg);
                 throw invalid_value_exception(error_msg);
             }
-            LOG_DEBUG("Dispatching frame " << frame_holder_to_string(frame->frame));
+            LOG_DEBUG("Dispatching frame " << frame->stream_id);
 
             if (data->is<serialized_invalid_frame>())
             {
