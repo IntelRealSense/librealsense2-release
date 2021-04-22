@@ -79,7 +79,7 @@ tracks:
     ros_distro: kinetic
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.43.0
+    version: 2.44.0
   melodic:
     actions:
     - bloom-export-upstream :{vcs_local_uri} :{vcs_type} --tag :{release_tag} --display-uri
