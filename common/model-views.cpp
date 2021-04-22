@@ -1091,6 +1091,22 @@ namespace rs2
                     model->enable(false);
             }
 
+            if (shared_filter->is<threshold_filter>())
+            {
+                if (s->supports(RS2_CAMERA_INFO_PRODUCT_ID))
+                {
+                // using short range for D405
+                    std::string device_pid = s->get_info(RS2_CAMERA_INFO_PRODUCT_ID);
+                    if (device_pid == "0B5B")
+                    {
+                        std::string error_msg;
+                        auto threshold_pb = shared_filter->as<threshold_filter>();
+                        threshold_pb.set_option(RS2_OPTION_MIN_DISTANCE, SHORT_RANGE_MIN_DISTANCE);
+                        threshold_pb.set_option(RS2_OPTION_MAX_DISTANCE, SHORT_RANGE_MAX_DISTANCE);
+                    }
+                }
+            }
+
             if (shared_filter->is<hdr_merge>())
             {
                 // processing block will be skipped if the requested option is not supported
@@ -1123,7 +1139,21 @@ namespace rs2
         auto colorizer = std::make_shared<processing_block_model>(
             this, "Depth Visualization", depth_colorizer,
             [=](rs2::frame f) { return depth_colorizer->colorize(f); }, error_message);
-        const_effects.push_back(colorizer);
+        const_effects.push_back(colorizer);        
+
+
+        if (s->supports(RS2_CAMERA_INFO_PRODUCT_ID))
+        {
+            std::string device_pid = s->get_info(RS2_CAMERA_INFO_PRODUCT_ID);
+
+            // using short range for D405
+            if (device_pid == "0B5B")
+            {
+                std::string error_msg;
+                depth_colorizer->set_option(RS2_OPTION_MIN_DISTANCE, SHORT_RANGE_MIN_DISTANCE);
+                depth_colorizer->set_option(RS2_OPTION_MAX_DISTANCE, SHORT_RANGE_MAX_DISTANCE);
+            }
+        }
 
         ss.str("");
         ss << "##" << dev.get_info(RS2_CAMERA_INFO_NAME)
@@ -1151,7 +1181,7 @@ namespace rs2
         {
             auto sensor_profiles = s->get_stream_profiles();
             reverse(begin(sensor_profiles), end(sensor_profiles));
-            rs2_format def_format{ RS2_FORMAT_ANY };
+            std::map<int, rs2_format> def_format{ {0, RS2_FORMAT_ANY} };
             auto default_resolution = std::make_pair(1280, 720);
             auto default_fps = 30;
             for (auto&& profile : sensor_profiles)
@@ -1185,7 +1215,7 @@ namespace rs2
                 if (profile.is_default())
                 {
                     stream_enabled[profile.unique_id()] = true;
-                    def_format = profile.format();
+                    def_format[profile.unique_id()] = profile.format();
                 }
 
                 profiles.push_back(profile);
@@ -1227,10 +1257,9 @@ namespace rs2
 
             for (auto format_array : format_values)
             {
-                if (get_default_selection_index(format_array.second, def_format, &selection_index))
+                if (get_default_selection_index(format_array.second, def_format[format_array.first], &selection_index))
                 {
                     ui.selected_format_id[format_array.first] = selection_index;
-                    break;
                 }
             }
 
@@ -2079,12 +2108,12 @@ namespace rs2
                     }
                 }
 
-                if (next_option == RS2_OPTION_DEPTH_UNITS)
+                if (next == RS2_OPTION_DEPTH_UNITS)
                 {
                     opt_md.dev->depth_units = opt_md.value;
                 }
 
-                if (next_option == RS2_OPTION_STEREO_BASELINE)
+                if (next == RS2_OPTION_STEREO_BASELINE)
                     opt_md.dev->stereo_baseline = opt_md.value;
             }
 
@@ -3103,10 +3132,13 @@ namespace rs2
                         {
                             show_max_range = true;
                             auto max_usable_range = mur_sensor.get_max_usable_depth_range();
-                            const float MIN_RANGE = 3.0f;
+                            const float MIN_RANGE = 1.5f;
                             const float MAX_RANGE = 9.0f;
-                            // display maximum usable range in range 3-9 [m] at 1 [m] resolution (rounded)
-                            auto max_usable_range_rounded = round(std::min(std::max(max_usable_range, MIN_RANGE), MAX_RANGE));
+                            // display maximum usable range in range 1.5-9 [m] at 1.5 [m] resolution (rounded)
+                            auto max_usable_range_limited = std::min(std::max(max_usable_range, MIN_RANGE), MAX_RANGE);
+
+                            //round to 1.5 [m]
+                            auto max_usable_range_rounded = static_cast<int>(max_usable_range_limited / 1.5f) * 1.5f;
 
                             if (viewer.metric_system)
                                 ss << std::dec << "\nMax usable range: " << std::setprecision(1) << max_usable_range_rounded << " meters";
@@ -3782,7 +3814,12 @@ namespace rs2
 
         for (auto&& sub : dev.query_sensors())
         {
-            auto model = std::make_shared<subdevice_model>(dev, std::make_shared<sensor>(sub), _detected_objects, error_message, viewer, new_device_connected);
+            auto s = std::make_shared<sensor>(sub);
+            auto objects = std::make_shared< atomic_objects_in_frame >();
+            // checking if the sensor is color_sensor or is D405 (with integrated RGB in depth sensor)
+            if (s->is<color_sensor>() || !strcmp(dev.get_info(RS2_CAMERA_INFO_PRODUCT_ID), "0B5B"))
+                objects = _detected_objects;
+            auto model = std::make_shared<subdevice_model>(dev, std::make_shared<sensor>(sub), objects, error_message, viewer, new_device_connected);
             subdevices.push_back(model);
         }
 
@@ -3846,6 +3883,7 @@ namespace rs2
                 if ((friendly_name.find("Tracking") != std::string::npos) ||
                     (friendly_name.find("Motion") != std::string::npos))
                 {
+                    viewer.synchronization_enable_prev_state = viewer.synchronization_enable.load();
                     viewer.synchronization_enable = false;
                 }
                 sub->play(profiles, viewer, dev_syncer);
@@ -4398,12 +4436,13 @@ namespace rs2
         duration -= mm;
         auto ss = duration_cast<seconds>(duration);
         duration -= ss;
+        auto ms = duration_cast<milliseconds>(duration);
 
         std::ostringstream stream;
         stream << std::setfill('0') << std::setw(hhh.count() >= 10 ? 2 : 1) << hhh.count() << ':' <<
             std::setfill('0') << std::setw(2) << mm.count() << ':' <<
-            std::setfill('0') << std::setw(2) << ss.count();// << '.' <<
-            //std::setfill('0') << std::setw(3) << ms.count();
+            std::setfill('0') << std::setw(2) << ss.count() << '.' <<
+            std::setfill('0') << std::setw(3) << ms.count();
         return stream.str();
     }
 
@@ -5187,18 +5226,15 @@ namespace rs2
 
                 if (dev.is<rs2::updatable>() && !is_locked)
                 {
-                    // L515 do not support update unsigned image currently
-                    bool is_l515_device = false;
-                    if (dev.supports(RS2_CAMERA_INFO_NAME))
+                    // L500 devices do not support update unsigned image currently
+                    bool is_l500_device = false;
+                    if (dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE))
                     {
-                        std::string dev_name = dev.get_info(RS2_CAMERA_INFO_NAME);
-                        if (dev_name.find("L515") != std::string::npos)
-                        {
-                            is_l515_device = true;
-                        }
+                        auto pl = dev.get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
+                        is_l500_device = (std::string(pl) == "L500");
                     }
 
-                    if (!is_l515_device)
+                    if( ! is_l500_device )
                     {
                         if (ImGui::Selectable("Update Unsigned Firmware...", false, updateFwFlags))
                         {
@@ -5764,7 +5800,7 @@ namespace rs2
                     ///////////////////////////////////////////
                     //TODO: make this a member function
                     std::vector<const char*> labels;
-                    std::vector< int > counters;
+                    std::vector< float > counters;
                     auto selected = 0, counter = 0;
                     for (auto i = opt_model.range.min; i <= opt_model.range.max; i += opt_model.range.step)
                     {
@@ -5772,7 +5808,7 @@ namespace rs2
 
                         // Default is only there for backwards compatibility and will throw an
                         // exception if used
-                        if( product == "L500" && i == RS2_L500_VISUAL_PRESET_DEFAULT )
+                        if( product == "L500" && (size_t)(i) == RS2_L500_VISUAL_PRESET_DEFAULT )
                             continue;
 
                         if (std::fabs(i - opt_model.value) < 0.001f)
@@ -6345,6 +6381,7 @@ namespace rs2
                                         ((friendly_name.find("Tracking") != std::string::npos) ||
                                         (friendly_name.find("Motion") != std::string::npos)))
                                     {
+                                        viewer.synchronization_enable_prev_state = viewer.synchronization_enable.load();
                                         viewer.synchronization_enable = false;
                                     }
                                     _update_readonly_options_timer.set_expired();
@@ -6380,6 +6417,12 @@ namespace rs2
                         if (ImGui::Button(label.c_str(), { 30,30 }))
                         {
                             sub->stop(viewer);
+                            std::string friendly_name = sub->s->get_info(RS2_CAMERA_INFO_NAME);
+                            if ((friendly_name.find("Tracking") != std::string::npos) ||
+                                (friendly_name.find("Motion") != std::string::npos))
+                            {
+                                viewer.synchronization_enable = viewer.synchronization_enable_prev_state.load();
+                            }
 
                             if (!std::any_of(subdevices.begin(), subdevices.end(),
                                 [](const std::shared_ptr<subdevice_model>& sm)
@@ -6455,7 +6498,37 @@ namespace rs2
                     label = to_string() << "Controls ##" << sub->s->get_info(RS2_CAMERA_INFO_NAME) << "," << id;
                     if (ImGui::TreeNode(label.c_str()))
                     {
-                        for (auto&& i : sub->s->get_supported_options())
+                        std::vector<rs2_option> supported_options = sub->s->get_supported_options();
+
+                        // moving the color dedicated options to the end of the vector
+                        std::vector<rs2_option> color_options = {
+                            RS2_OPTION_BACKLIGHT_COMPENSATION,
+                            RS2_OPTION_BRIGHTNESS,
+                            RS2_OPTION_CONTRAST,
+                            RS2_OPTION_GAMMA,
+                            RS2_OPTION_HUE,
+                            RS2_OPTION_SATURATION,
+                            RS2_OPTION_SHARPNESS,
+                            RS2_OPTION_ENABLE_AUTO_WHITE_BALANCE,
+                            RS2_OPTION_WHITE_BALANCE
+                        };
+
+                        std::vector<rs2_option> so_ordered;
+
+                        for (auto&& i : supported_options)
+                        {
+                            auto it = find(color_options.begin(), color_options.end(), i);
+                            if (it == color_options.end())
+                                so_ordered.push_back(i);
+                        }
+
+                        std::for_each(color_options.begin(), color_options.end(), [&](rs2_option opt) {
+                            auto it = std::find(supported_options.begin(), supported_options.end(), opt);
+                            if (it != supported_options.end())
+                                so_ordered.push_back(opt);
+                            });
+
+                        for (auto&& i : so_ordered)
                         {
                             auto opt = static_cast<rs2_option>(i);
                             if (viewer.is_option_skipped(opt)) continue;
