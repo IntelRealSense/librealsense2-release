@@ -5,6 +5,8 @@ See documentation for brainstem here:
 https://acroname.com/reference/python/index.html
 """
 
+from rspy import log
+
 
 if __name__ == '__main__':
     import os, sys, getopt
@@ -29,24 +31,59 @@ if __name__ == '__main__':
 try:
     import brainstem
 except ModuleNotFoundError:
-    print( '-E-', 'No acroname library is available!' )
+    log.w( 'No acroname library is available!' )
     raise
 
 hub = None
 
 
-def connect():
+class NoneFoundError( RuntimeError ):
+    """
+    """
+    def __init__( self, message = None ):
+        super().__init__( self, message  or  'no Acroname module found' )
+
+
+def discover():
+    """
+    Return all Acroname module specs in a list. Raise NoneFoundError if one is not found!
+    """
+
+    log.d( 'discovering Acroname modules ...' )
+    # see https://acroname.com/reference/_modules/brainstem/module.html#Module.discoverAndConnect
+    try:
+        log.debug_indent()
+        specs = brainstem.discover.findAllModules( brainstem.link.Spec.USB )
+        if not specs:
+            raise NoneFoundError()
+        for spec in specs:
+            log.d( '...', spec )
+    finally:
+        log.debug_unindent()
+
+    return specs
+
+
+def connect( spec = None ):
     """
     Connect to the hub. Raises RuntimeError on failure
     """
-    
+
     global hub
     if not hub:
         hub = brainstem.stem.USBHub3p()
 
-    result = hub.discoverAndConnect( brainstem.link.Spec.USB )
+    if spec:
+        specs = [spec]
+    else:
+        specs = discover()
+        spec = specs[0]
+
+    result = hub.connectFromSpec( spec )
     if result != brainstem.result.Result.NO_ERROR:
         raise RuntimeError( "failed to connect to acroname (result={})".format( result ))
+    elif len(specs) > 1:
+        log.d( 'connected to', spec )
 
 
 def is_connected():
@@ -95,26 +132,38 @@ def port_state( port ):
     return "Unknown Error ({})".format( status.value )
 
 
-def enable_ports( ports = None, disable_other_ports = False ):
+def enable_ports( ports = None, disable_other_ports = False, sleep_on_change = 0 ):
     """
     Set enable state to provided ports
     :param ports: List of port numbers; if not provided, enable all ports
     :param disable_other_ports: if True, the ports not in the list will be disabled
+    :param sleep_on_change: Number of seconds to sleep if any change is made
     :return: True if no errors found, False otherwise
     """
     global hub
     result = True
+    changed = False
     for port in range(0, 8):
         #
         if ports is None or port in ports:
-            action_result = hub.usb.setPortEnable( port )
-            if action_result != brainstem.result.Result.NO_ERROR:
-                result = False
+            if not is_port_enabled( port ):
+                action_result = hub.usb.setPortEnable( port )
+                if action_result != brainstem.result.Result.NO_ERROR:
+                    result = False
+                else:
+                    changed = True
         #
         elif disable_other_ports:
-            action_result = hub.usb.setPortDisable( port )
-            if action_result != brainstem.result.Result.NO_ERROR:
-                result = False
+            if is_port_enabled( port ):
+                action_result = hub.usb.setPortDisable( port )
+                if action_result != brainstem.result.Result.NO_ERROR:
+                    result = False
+                else:
+                    changed = True
+    #
+    if changed and sleep_on_change:
+        import time
+        time.sleep( sleep_on_change )
     #
     return result
 

@@ -139,7 +139,7 @@ namespace librealsense
                     = utilities::time::l500::get_manufacture_work_week( optic_serial );
                 auto age
                     = utilities::time::get_work_weeks_since( manufacture );
-                command cmd( fw_cmd::SET_AGE, (uint8_t)age );
+                command cmd( fw_cmd::UNIT_AGE_SET, (uint8_t)age );
                 _hw_monitor->send( cmd );
             }
             catch( ... )
@@ -283,7 +283,7 @@ namespace librealsense
             [=]() {
                 auto z16rot = std::make_shared<rotation_transform>(RS2_FORMAT_Z16, RS2_STREAM_DEPTH, RS2_EXTENSION_DEPTH_FRAME);
                 auto y8rot = std::make_shared<rotation_transform>(RS2_FORMAT_Y8, RS2_STREAM_INFRARED, RS2_EXTENSION_VIDEO_FRAME);
-                auto sync = std::make_shared<syncer_process_unit>(); // is_zo_enabled_opt );
+                auto sync = std::make_shared<syncer_process_unit>(nullptr, false); // disable logging on this internal syncer
 
                 auto cpb = std::make_shared<composite_processing_block>();
                 cpb->add(z16rot);
@@ -310,7 +310,7 @@ namespace librealsense
                 auto z16rot = std::make_shared<rotation_transform>(RS2_FORMAT_Z16, RS2_STREAM_DEPTH, RS2_EXTENSION_DEPTH_FRAME);
                 auto y8rot = std::make_shared<rotation_transform>(RS2_FORMAT_Y8, RS2_STREAM_INFRARED, RS2_EXTENSION_VIDEO_FRAME);
                 auto conf = std::make_shared<confidence_rotation_transform>();
-                auto sync = std::make_shared<syncer_process_unit>(); // is_zo_enabled_opt );
+                auto sync = std::make_shared<syncer_process_unit>(nullptr, false); // disable logging on this internal syncer
 
                 auto cpb = std::make_shared<composite_processing_block>();
                 cpb->add(z16rot);
@@ -453,12 +453,26 @@ namespace librealsense
     {
         // Stop all data streaming/exchange pipes with HW
         stop_activity();
+        using namespace std;
+        using namespace std::chrono;
 
         try {
             LOG_INFO("entering to update state, device disconnect is expected");
             command cmd(ivcam2::DFU);
             cmd.param1 = 1;
             _hw_monitor->send(cmd);
+            std::vector<uint8_t> gvd_buff(HW_MONITOR_BUFFER_SIZE);
+            for (auto i = 0; i < 50; i++)
+            {
+
+                _hw_monitor->get_gvd(gvd_buff.size(), gvd_buff.data(), GVD);
+                this_thread::sleep_for(milliseconds(50));
+            }
+            throw std::runtime_error("Device still connected!");
+
+        }
+        catch (std::exception& e) {
+            LOG_WARNING(e.what());
         }
         catch (...) {
             // The set command returns a failure because switching to DFU resets the device while the command is running.
@@ -781,6 +795,7 @@ namespace librealsense
 
     notification l500_notification_decoder::decode(int value)
     {
+        // Anything listed in l500-private.h on l500_fw_error_report is an error; everything else is a warning
         if (l500_fw_error_report.find(static_cast<uint8_t>(value)) != l500_fw_error_report.end())
             return{ RS2_NOTIFICATION_CATEGORY_HARDWARE_ERROR, value, RS2_LOG_SEVERITY_ERROR, l500_fw_error_report.at(static_cast<uint8_t>(value)) };
 

@@ -595,7 +595,7 @@ namespace rs2
                                             auto depth_profile = dev.get_stream(RS2_STREAM_DEPTH);
                                             auto w = depth_profile.as<video_stream_profile>().width();
                                             auto h = depth_profile.as<video_stream_profile>().height();
-                                            depth_sensor.set_option(RS2_OPTION_SENSOR_MODE, resolution_from_width_height(w, h));
+                                            depth_sensor.set_option(RS2_OPTION_SENSOR_MODE, (float)(resolution_from_width_height(w, h)));
                                         }
 
                                         auto profile = _pipe.start(cfg);
@@ -900,7 +900,7 @@ namespace rs2
             if (right_sensor != profiles.end())
             {
                 auto left_sensor = std::find_if(profiles.begin(), profiles.end(), [](rs2::stream_profile& p)
-                { return (p.stream_index() == 0) && (p.stream_type() == RS2_STREAM_DEPTH); });
+                { return (p.stream_index() == 1) && (p.stream_type() == RS2_STREAM_INFRARED); });
                 try
                 {
                     auto extrin = (*left_sensor).get_extrinsics_to(*right_sensor);
