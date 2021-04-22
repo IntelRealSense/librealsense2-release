@@ -1,13 +1,13 @@
 # License: Apache 2.0. See LICENSE file in root directory.
-# Copyright(c) 2020 Intel Corporation. All Rights Reserved.
+# Copyright(c) 2021 Intel Corporation. All Rights Reserved.
 
 """
 This module is for formatting and writing unit-tests in python. The general format is as follows
-1. Use start to start a test and give it, as an argument, the name of the test
+1. Use start() to start a test and give it, as an argument, the name of the test
 2. Use whatever check functions are relevant to test the run
-3. Use finish to signal the end of the test
+3. Use finish() to signal the end of the test
 4. Repeat stages 1-3 as the number of tests you want to run in the file
-5. Use print_results_and_exit to print the number of tests and assertions that passed/failed in the correct format
+5. Use print_results_and_exit() to print the number of tests and assertions that passed/failed in the correct format
    before exiting with 0 if all tests passed or with 1 if there was a failed test
 
 In addition you may want to use the 'info' functions in this module to add more detailed
@@ -15,7 +15,8 @@ messages in case of a failed check
 """
 
 import os, sys, subprocess, traceback, platform
-import pyrealsense2 as rs
+
+from rspy import log
 
 n_assertions = 0
 n_failed_assertions = 0
@@ -25,61 +26,90 @@ test_failed = False
 test_in_progress = False
 test_info = {} # Dictionary for holding additional information to print in case of a failed check.
 
-def set_env_vars(env_vars):
+
+def set_env_vars( env_vars ):
     """
-    If this is the first time running this script we set the wanted environment, however it is impossible to change the
-    current running environment so we rerun the script in a child process that inherits the environment we set
+    We want certain environment variables set when we get here. We assume they're not set.
+
+    However, it is impossible to change the current running environment to see them. Instead, we rerun ourselves
+    in a child process that inherits the environment we set.
+
+    To do this, we depend on a specific argument in sys.argv that tells us this is the rerun (meaning child
+    process). When we see it, we assume the variables are set and don't do anything else.
+
+    For this to work well, the environment variable requirement (set_env_vars call) should appear as one of the
+    first lines of the test.
+
     :param env_vars: A dictionary where the keys are the name of the environment variable and the values are the
         wanted values in string form (environment variables must be strings)
     """
-    if len(sys.argv) < 2:
+    if sys.argv[-1] != 'rerun':
+        log.d( 'environment variables needed:', env_vars )
         for env_var, val in env_vars.items():
             os.environ[env_var] = val
-        sys.argv.append("rerun")
-        if platform.system() == 'Linux' and "microsoft" not in platform.uname()[3].lower():
-            cmd = ["python3"]
-        else:
-            cmd = ["py", "-3"]
+        cmd = [sys.executable]
+        if 'site' not in sys.modules:
+            #     -S     : don't imply 'import site' on initialization
+            cmd += ["-S"]
         if sys.flags.verbose:
+            #     -v     : verbose (trace import statements)
             cmd += ["-v"]
-        cmd += sys.argv
+        cmd += sys.argv  # --debug, or any other args
+        cmd += ["rerun"]
+        log.d( 'running:', cmd )
         p = subprocess.run( cmd, stderr=subprocess.PIPE, universal_newlines=True )
-        exit(p.returncode)
+        sys.exit( p.returncode )
+    log.d( 'rerun detected' )
+    sys.argv = sys.argv[:-1]  # Remove the rerun
+
 
 def find_first_device_or_exit():
     """
     :return: the first device that was found, if no device is found the test is skipped. That way we can still run
         the unit-tests when no device is connected and not fail the tests that check a connected device
     """
+    import pyrealsense2 as rs
     c = rs.context()
     if not c.devices.size():  # if no device is connected we skip the test
         print("No device found, skipping test")
-        exit(0)
-    return c.devices[0]
+        sys.exit( 0 )
+    dev = c.devices[0]
+    log.d( 'found', dev )
+    return dev
 
-def find_devices_by_product_line_or_exit(product_line):
+
+def find_devices_by_product_line_or_exit( product_line ):
     """
     :param product_line: The product line of the wanted devices
     :return: A list of devices of specific product line that was found, if no device is found the test is skipped.
         That way we can still run the unit-tests when no device is connected
         and not fail the tests that check a connected device
     """
+    import pyrealsense2 as rs
     c = rs.context()
     devices_list = c.query_devices(product_line)
     if devices_list.size() == 0:
-        print("No device of the" , product_line ,"product line was found; skipping test")
-        exit(0)
+        print( "No device of the", product_line, "product line was found; skipping test" )
+        sys.exit( 0 )
+    log.d( 'found', devices_list.size(), product_line, 'devices:', [dev for dev in devices_list] )
     return devices_list
+
 
 def print_stack():
     """
     Function for printing the current call stack. Used when an assertion fails
     """
-    test_py_path = os.sep + "unit-tests" + os.sep + "py" + os.sep + "test.py"
-    for line in traceback.format_stack():
-        if test_py_path in line: # avoid printing the lines of calling to this function
-            continue
-        print(line)
+    print( 'Traceback (most recent call last):' )
+    stack = traceback.format_stack()
+    # Avoid stack trace into format_stack():
+    #     File "C:/work/git/lrs\unit-tests\py\rspy\test.py", line 124, in check
+    #       print_stack()
+    #     File "C:/work/git/lrs\unit-tests\py\rspy\test.py", line 87, in print_stack
+    #       stack = traceback.format_stack()
+    stack = stack[:-2]
+    for line in reversed( stack ):
+        print( line, end = '' )  # format_stack() adds \n
+
 
 """
 The following functions are for asserting test cases:
@@ -87,6 +117,7 @@ The check family of functions tests an expression and continues the test whether
 The require family are equivalent but execution is aborted if the assertion fails. In this module, the require family
 is used by sending abort=True to check functions
 """
+
 
 def check_failed():
     """
@@ -97,9 +128,11 @@ def check_failed():
     test_failed = True
     print_info()
 
+
 def abort():
-    print("Abort was specified in a failed check. Aborting test")
-    exit(1)
+    log.e( "Aborting test" )
+    sys.exit( 1 )
+
 
 def check(exp, abort_if_failed = False):
     """
@@ -111,14 +144,15 @@ def check(exp, abort_if_failed = False):
     global n_assertions
     n_assertions += 1
     if not exp:
-        print("Check failed, received", exp)
-        check_failed()
         print_stack()
+        print( "    check failed; received", exp )
+        check_failed()
         if abort_if_failed:
             abort()
         return False
     reset_info()
     return True
+
 
 def check_equal(result, expected, abort_if_failed = False):
     """
@@ -136,14 +170,16 @@ def check_equal(result, expected, abort_if_failed = False):
     global n_assertions
     n_assertions += 1
     if result != expected:
-        print("Result was:" + result + "\nBut we expected: " + expected)
-        check_failed()
         print_stack()
+        print( "    result  :", result )
+        print( "    expected:", expected )
+        check_failed()
         if abort_if_failed:
             abort()
         return False
     reset_info()
     return True
+
 
 def unreachable( abort_if_failed = False ):
     """
@@ -151,6 +187,7 @@ def unreachable( abort_if_failed = False ):
     :param abort_if_failed: If True and this function is reached the test will be aborted
     """
     check(False, abort_if_failed)
+
 
 def unexpected_exception():
     """
@@ -161,6 +198,7 @@ def unexpected_exception():
     n_assertions += 1
     traceback.print_exc( file = sys.stdout )
     check_failed()
+
 
 def check_equal_lists(result, expected, abort_if_failed = False):
     """
@@ -186,15 +224,16 @@ def check_equal_lists(result, expected, abort_if_failed = False):
             print("The element of index", i, "in both lists was not equal")
         i += 1
     if failed:
-        print("Result list:", result)
-        print("Expected list:", expected)
-        check_failed()
         print_stack()
+        print( "    result list  :", result )
+        print( "    expected list:", expected )
+        check_failed()
         if abort_if_failed:
             abort()
         return False
     reset_info()
     return True
+
 
 def check_exception(exception, expected_type, expected_msg = None, abort_if_failed = False):
     """
@@ -207,19 +246,19 @@ def check_exception(exception, expected_type, expected_msg = None, abort_if_fail
     """
     failed = False
     if type(exception) != expected_type:
-        print("Raised exception was of type", type(exception), "and not of type", expected_type, "as expected")
-        failed = True
-    if expected_msg and str(exception) != expected_msg:
-        print("Exception had message:", str(exception), "\nBut we expected:", expected_msg)
-        failed = True
+        failed = [ "    raised exception was of type", type(exception), "\n    but expected type", expected_type ]
+    elif expected_msg and str(exception) != expected_msg:
+        failed = [ "    exception message:", str(exception), "\n    but we expected:", expected_msg ]
     if failed:
-        check_failed()
         print_stack()
+        print( *failed )
+        check_failed()
         if abort_if_failed:
             abort()
         return False
     reset_info()
     return True
+
 
 def check_frame_drops(frame, previous_frame_number, allowed_drops = 1):
     """
@@ -239,19 +278,16 @@ def check_frame_drops(frame, previous_frame_number, allowed_drops = 1):
         if dropped_frames > allowed_drops:
             print( dropped_frames, "frame(s) starting from frame", previous_frame_number + 1, "were dropped" )
             failed = True
-        if dropped_frames < 0:
+        elif dropped_frames < 0:
             print( "Frames repeated or out of order. Got frame", frame_number, "after frame",
                    previous_frame_number)
             failed = True
     if failed:
-        check_failed()
+        fail() 
         return False
     reset_info()
     return True
 
-"""
-The following functions are for adding additional information to the printed messages in case of a failed check.
-"""
 
 class Information:
     """
@@ -261,7 +297,8 @@ class Information:
         self.value = value
         self.persistent = persistent
 
-def info(name, value, persistent = False):
+
+def info( name, value, persistent = False ):
     """
     This function is used to store additional information to print in case of a failed test. This information is
     erased after the next check. The information is stored in the dictionary test_info, Keys are names (strings)
@@ -274,6 +311,7 @@ def info(name, value, persistent = False):
     """
     global test_info
     test_info[name] = Information(value, persistent)
+
 
 def reset_info(persistent = False):
     """
@@ -288,6 +326,7 @@ def reset_info(persistent = False):
             if not information.persistent:
                 test_info.pop(name)
 
+
 def print_info():
     global test_info
     if not test_info: # No information is stored
@@ -297,61 +336,77 @@ def print_info():
         print("Name:", name, "        value:", information.value)
     reset_info()
 
-"""
-The following functions are for formatting tests in a file
-"""
 
 def fail():
     """
     Function for manually failing a test in case you want a specific test that does not fit any check function
     """
-    global test_in_progress, n_failed_tests, test_failed
-    if not test_in_progress:
-        raise RuntimeError("Tried to fail a test with no test running")
+    check_test_in_progress()
+    global test_failed
     if not test_failed:
-        n_failed_tests += 1
         test_failed = True
+
+
+def check_test_in_progress( in_progress = True ):
+    global test_in_progress
+    if test_in_progress != in_progress:
+        if test_in_progress:
+            raise RuntimeError( "test case is already running" )
+        else:
+            raise RuntimeError( "no test case is running" )
+
 
 def start(*test_name):
     """
     Used at the beginning of each test to reset the global variables
     :param test_name: Any number of arguments that combined give the name of this test
-    :return:
     """
+    print_separator()
     global n_tests, test_failed, test_in_progress
-    if test_in_progress:
-        raise RuntimeError("Tried to start test before previous test finished. Aborting test")
     n_tests += 1
     test_failed = False
     test_in_progress = True
-    reset_info(persistent=True)
-    print(*test_name)
+    reset_info( persistent = True )
+    print( *test_name )
+
 
 def finish():
     """
     Used at the end of each test to check if it passed and print the answer
     """
+    check_test_in_progress()
     global test_failed, n_failed_tests, test_in_progress
-    if not test_in_progress:
-        raise RuntimeError("Tried to finish a test without starting one")
     if test_failed:
         n_failed_tests += 1
         print("Test failed")
     else:
         print("Test passed")
-    print()
     test_in_progress = False
+
+
+def print_separator():
+    """
+    For use only in-between test-cases, this will separate them in some visual way so as
+    to be easier to differentiate.
+    """
+    check_test_in_progress( False )
+    global n_tests
+    if n_tests:
+        print()
+        print( '___' )
+
 
 def print_results_and_exit():
     """
     Used to print the results of the tests in the file. The format has to agree with the expected format in check_log()
     in run-unit-tests and with the C++ format using Catch
     """
+    print_separator()
     global n_assertions, n_tests, n_failed_assertions, n_failed_tests
     if n_failed_tests:
         passed = n_assertions - n_failed_assertions
         print("test cases:", n_tests, "|" , n_failed_tests,  "failed")
         print("assertions:", n_assertions, "|", passed, "passed |", n_failed_assertions, "failed")
-        exit(1)
+        sys.exit(1)
     print("All tests passed (" + str(n_assertions) + " assertions in " + str(n_tests) + " test cases)")
-    exit(0)
+    sys.exit(0)
