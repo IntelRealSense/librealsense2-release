@@ -69,11 +69,11 @@ tracks:
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc} --os-name rhel
     devel_branch: null
-    last_release: v2.43.0
-    last_version: 2.43.0
+    last_release: v2.44.0
+    last_version: 2.44.0
     name: upstream
     patches: null
-    release_inc: '2'
+    release_inc: '1'
     release_repo_url: null
     release_tag: v:{version}
     ros_distro: kinetic
