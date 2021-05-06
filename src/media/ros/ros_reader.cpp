@@ -496,6 +496,7 @@ namespace librealsense
             data[0] = static_cast<float>(msg->linear_acceleration.x);
             data[1] = static_cast<float>(msg->linear_acceleration.y);
             data[2] = static_cast<float>(msg->linear_acceleration.z);
+            LOG_DEBUG("RS2_STREAM_ACCEL " << motion_frame);
         }
         else if (stream_id.stream_type == RS2_STREAM_GYRO)
         {
@@ -503,6 +504,7 @@ namespace librealsense
             data[0] = static_cast<float>(msg->angular_velocity.x);
             data[1] = static_cast<float>(msg->angular_velocity.y);
             data[2] = static_cast<float>(msg->angular_velocity.z);
+            LOG_DEBUG("RS2_STREAM_GYRO " << motion_frame);
         }
         else
         {
@@ -906,7 +908,8 @@ namespace librealsense
         std::vector<int> sr300_PIDs =
         {
             SR300_PID,
-            SR300v2_PID
+            SR300v2_PID,
+            SR306_PID
         };
 
         auto it = std::find_if(sr300_PIDs.begin(), sr300_PIDs.end(), [&](int sr300_pid)
