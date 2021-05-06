@@ -118,7 +118,7 @@ void add_playback_device(context& ctx, device_models_list& device_models,
                             {
                                 if (sub->streaming)
                                 {
-                                    sub->stop(viewer_model);
+                                    sub->stop(viewer_model.not_model);
                                 }
                             }
                         }
@@ -290,7 +290,10 @@ bool refresh_devices(std::mutex& m,
 
 int main(int argc, const char** argv) try
 {
+
+#ifdef BUILD_EASYLOGGINGPP
     rs2::log_to_console(RS2_LOG_SEVERITY_WARN);
+#endif
 
     context ctx;
     ux_window window("Intel RealSense Viewer", ctx);
@@ -735,7 +738,7 @@ int main(int argc, const char** argv) try
         for (auto&& sub : device_model->subdevices)
         {
             if (sub->streaming)
-                sub->stop(viewer_model);
+                sub->stop(viewer_model.not_model);
         }
 
     return EXIT_SUCCESS;
