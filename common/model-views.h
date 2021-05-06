@@ -81,7 +81,7 @@ inline ImVec4 blend(const ImVec4& c, float a)
 
 namespace rs2
 {
-    constexpr const char* server_versions_db_url = "http://realsense-hw-public.s3-eu-west-1.amazonaws.com/Releases/rs_versions_db.json";
+    constexpr const char* server_versions_db_url = "https://librealsense.intel.com/Releases/rs_versions_db.json";
     
     void prepare_config_file();
 
@@ -561,7 +561,7 @@ namespace rs2
         bool is_selected_combination_supported();
         std::vector<stream_profile> get_selected_profiles();
         std::vector<stream_profile> get_supported_profiles();
-        void stop(viewer_model& viewer);
+        void stop(std::shared_ptr<notifications_model> not_model);
         void play(const std::vector<stream_profile>& profiles, viewer_model& viewer, std::shared_ptr<rs2::asynchronous_syncer>);
         bool is_synchronized_frame(viewer_model& viewer, const frame& f);
         void update(std::string& error_message, notifications_model& model);
@@ -676,6 +676,10 @@ namespace rs2
         std::vector<std::shared_ptr<processing_block_model>> post_processing;
         bool post_processing_enabled = true;
         std::vector<std::shared_ptr<processing_block_model>> const_effects;
+
+    private:
+        const float SHORT_RANGE_MIN_DISTANCE = 0.05f; // 5 cm
+        const float SHORT_RANGE_MAX_DISTANCE = 4.0f;  // 4 meters
     };
 
     class viewer_model;
@@ -762,8 +766,9 @@ namespace rs2
         void stop_recording(viewer_model& viewer);
         void pause_record();
         void resume_record();
-
+        
         void refresh_notifications(viewer_model& viewer);
+        void check_for_bundled_fw_update(const rs2::context& ctx, std::shared_ptr<notifications_model> not_model);
 
         int draw_playback_panel(ux_window& window, ImFont* font, viewer_model& view);
         bool draw_advanced_controls(viewer_model& view, ux_window& window, std::string& error_message);
@@ -780,7 +785,7 @@ namespace rs2
         void begin_update(std::vector<uint8_t> data,
             viewer_model& viewer, std::string& error_message);
         void begin_update_unsigned(viewer_model& viewer, std::string& error_message);
-        void check_for_device_updates(rs2::context& ctx, std::shared_ptr<updates_model> updates);
+        void check_for_device_updates(viewer_model& viewer);
 
 
         std::shared_ptr< atomic_objects_in_frame > get_detected_objects() const { return _detected_objects; }
@@ -846,7 +851,14 @@ namespace rs2
 
         void load_viewer_configurations(const std::string& json_str);
         void save_viewer_configurations(std::ofstream& outfile, nlohmann::json& j);
+        void handle_online_sw_update(
+            std::shared_ptr < notifications_model > nm,
+            std::shared_ptr< sw_update::dev_updates_profile::update_profile > update_profile );
 
+        bool handle_online_fw_update(
+            const context & ctx,
+            std::shared_ptr< notifications_model > nm,
+            std::shared_ptr< sw_update::dev_updates_profile::update_profile > update_profile );
 
         std::shared_ptr<recorder> _recorder;
         std::vector<std::shared_ptr<subdevice_model>> live_subdevices;
