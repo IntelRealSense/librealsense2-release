@@ -26,6 +26,12 @@
 
 namespace rs2
 {
+    template <typename T>
+    T non_negative(const T& input)
+    {
+        return std::max(static_cast<T>(0), input);
+    }
+
     // Allocates a frameset from points and texture frames
     frameset_allocator::frameset_allocator(viewer_model* viewer) : owner(viewer),
         filter([this](frame f, frame_source& s)
@@ -918,6 +924,7 @@ namespace rs2
         selected_shader = (shader_type)config_file::instance().get_or_default(
             configurations::viewer::shading_mode, 2);
 
+#ifdef BUILD_EASYLOGGINGPP
         auto min_severity = (rs2_log_severity)config_file::instance().get_or_default(
             configurations::viewer::log_severity, 2);
 
@@ -934,6 +941,7 @@ namespace rs2
 
             rs2::log_to_file(min_severity, filename.c_str());
         }
+#endif
 
         show_skybox = config_file::instance().get_or_default(
             configurations::performance::show_skybox, true);
@@ -1392,9 +1400,6 @@ namespace rs2
             error_message = ex.what();
         }
 
-
-        
-
         window.begin_viewport();
 
         auto flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove 
@@ -1410,11 +1415,23 @@ namespace rs2
 
         ImGui::Begin("Viewport", nullptr, { viewer_rect.w, viewer_rect.h }, 0.f, flags);
 
-        draw_viewport(viewer_rect, window, devices, error_message, texture_frame, p);
+        try
+        {
+            draw_viewport( viewer_rect, window, devices, error_message, texture_frame, p );
 
-        modal_notification_on = not_model->draw(window,
-            static_cast<int>(window.width()), static_cast<int>(window.height()),
-            error_message);
+            modal_notification_on = not_model->draw( window,
+                                                     static_cast< int >( window.width() ),
+                                                     static_cast< int >( window.height() ),
+                                                     error_message );
+        }
+        catch( const error & e )
+        {
+            error_message = error_to_string( e );
+        }
+        catch( const std::exception & e )
+        {
+            error_message = e.what();
+        }
 
         popup_if_error(window, error_message);
 
@@ -1930,8 +1947,8 @@ namespace rs2
 
         auto bottom_y = win.framebuf_height() - viewer_rect.y - viewer_rect.h;
         
-        glViewport(static_cast<GLint>(viewer_rect.x), static_cast<GLint>(bottom_y),
-            static_cast<GLsizei>(viewer_rect.w), static_cast<GLsizei>(viewer_rect.h - top_bar_height));
+        glViewport(static_cast<GLint>(non_negative(viewer_rect.x)), static_cast<GLint>(non_negative(bottom_y)),
+            static_cast<GLsizei>(non_negative(viewer_rect.w)), static_cast<GLsizei>(non_negative(viewer_rect.h - top_bar_height)));
 
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1940,7 +1957,7 @@ namespace rs2
 
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
-        gluPerspective(45, viewer_rect.w / win.framebuf_height(), 0.001f, 100.0f);
+        gluPerspective(45, non_negative(viewer_rect.w / win.framebuf_height()), 0.001f, 100.0f);
         matrix4 perspective_mat;
         glGetFloatv(GL_PROJECTION_MATRIX, perspective_mat);
         glPopMatrix();
@@ -2503,14 +2520,15 @@ namespace rs2
 
                 ImGui::PushStyleColor(ImGuiCol_Text, tab != 3 ? light_grey : light_blue);
                 ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, tab != 3 ? light_grey : light_blue);
+
                 if (ImGui::Button("Updates", { 120, 30 }))
                 {
                     tab = 3;
                     config_file::instance().set(configurations::viewer::settings_tab, tab);
                     temp_cfg.set(configurations::viewer::settings_tab, tab);
                 }
-                ImGui::PopStyleColor(2);
 
+                ImGui::PopStyleColor(2);
                 ImGui::PopFont();
                 ImGui::PopStyleColor(2); // button color
 
@@ -2824,7 +2842,9 @@ namespace rs2
                     {
                         ImGui::SetTooltip("%s", "When firmware of the device is below the version bundled with this software release\nsuggest firmware update");
                     }
+#ifdef CHECK_FOR_UPDATES 
                     ImGui::Separator();
+
                     ImGui::Text("%s", "SW/FW Updates From Server:");
                     if (ImGui::IsItemHovered())
                     {
@@ -2865,6 +2885,7 @@ namespace rs2
                             temp_cfg.set(configurations::update::sw_updates_official_server, false);
                         }
                     }
+#endif
                 }
 
                 ImGui::Separator();
@@ -3100,12 +3121,30 @@ namespace rs2
             // This can work poorly when the app FPS is really terrible (< 10)
             // but overall works resonably well
             const auto MAX_MOUSE_JUMP = 200;
+            const auto SCROLL_SLOW_MAX_TIME_MS = 50;
+            const auto SCROLL_FAST_MIN_TIME_MS = 500;
+            float zoom_per_tick = 0.2f;
+            static auto prev_scroll_time = std::chrono::high_resolution_clock::now();
+            if (mouse.mouse_wheel != 0)
+            {
+                auto scroll_time = std::chrono::high_resolution_clock::now();
+                auto delta_scroll_time = std::chrono::duration_cast<std::chrono::milliseconds>(scroll_time - prev_scroll_time).count();
+                prev_scroll_time = scroll_time;
+
+                // scrolling impact is scaled up / down if the scrolling speed is fast / slow
+                if (delta_scroll_time < SCROLL_SLOW_MAX_TIME_MS)
+                    zoom_per_tick *= 2.f;
+                else if (delta_scroll_time > SCROLL_FAST_MIN_TIME_MS)
+                    zoom_per_tick *= 0.5f;
+            }
+            
+            
             if (std::abs(cx - px) < MAX_MOUSE_JUMP && 
                 std::abs(cy - py) < MAX_MOUSE_JUMP )
                 arcball_camera_update(
                 (float*)&pos, (float*)&target, (float*)&up, view,
                 sec_since_update,
-                0.2f, // zoom per tick
+                zoom_per_tick,
                 -0.1f, // pan speed
                 3.0f, // rotation multiplier
                 static_cast<int>(viewer_rect.w), static_cast<int>(viewer_rect.h), // screen (window) size
@@ -3281,7 +3320,7 @@ namespace rs2
         std::shared_ptr<texture_buffer> texture, points points)
     {
         if (!modal_notification_on)
-            updates->draw(*this, window, error_message);
+            updates->draw(not_model, window, error_message);
 
         static bool first = true;
         if (first)
