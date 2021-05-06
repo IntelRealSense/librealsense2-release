@@ -595,7 +595,7 @@ namespace rs2
                                             auto depth_profile = dev.get_stream(RS2_STREAM_DEPTH);
                                             auto w = depth_profile.as<video_stream_profile>().width();
                                             auto h = depth_profile.as<video_stream_profile>().height();
-                                            depth_sensor.set_option(RS2_OPTION_SENSOR_MODE, resolution_from_width_height(w, h));
+                                            depth_sensor.set_option(RS2_OPTION_SENSOR_MODE, (float)(resolution_from_width_height(w, h)));
                                         }
 
                                         auto profile = _pipe.start(cfg);
@@ -842,7 +842,28 @@ namespace rs2
                 if (dpt)
                     _metrics_model.begin_process_frame(dpt);
             }
-            catch (...){} // on device disconnect
+            catch( const error & e )
+            {
+                // Can occur on device disconnect
+                _viewer_model.not_model->output.add_log( RS2_LOG_SEVERITY_DEBUG,
+                                                         __FILE__,
+                                                         __LINE__,
+                                                         error_to_string( e ) );
+            }
+            catch( const std::exception & e )
+            {
+                _viewer_model.not_model->output.add_log( RS2_LOG_SEVERITY_ERROR,
+                                                         __FILE__,
+                                                         __LINE__,
+                                                         e.what() );
+            }
+            catch( ... )
+            {
+                _viewer_model.not_model->output.add_log( RS2_LOG_SEVERITY_ERROR,
+                                                         __FILE__,
+                                                         __LINE__,
+                                                         "Unknown error occurred" );
+            }
 
         }
 
@@ -900,7 +921,7 @@ namespace rs2
             if (right_sensor != profiles.end())
             {
                 auto left_sensor = std::find_if(profiles.begin(), profiles.end(), [](rs2::stream_profile& p)
-                { return (p.stream_index() == 0) && (p.stream_type() == RS2_STREAM_DEPTH); });
+                { return (p.stream_index() == 1) && (p.stream_type() == RS2_STREAM_INFRARED); });
                 try
                 {
                     auto extrin = (*left_sensor).get_extrinsics_to(*right_sensor);
