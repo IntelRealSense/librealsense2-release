@@ -296,12 +296,17 @@ class TestConfigFromText(TestConfig):
         for context in file.grep( regex, source ):
             match = context['match']
             directive = match.group(1)
-            params = [s for s in context['match'].group(2).split()]
+            text_params = match.group(2).strip()
+            params = [s for s in text_params.split()]
             comment = match.group(3)
             if directive == 'device':
                 #log.d( '    configuration:', params )
                 if not params:
                     log.e( source + '+' + str(context['index']) + ': device directive with no devices listed' )
+                elif 'each' in text_params.lower() and len(params) > 1:
+                    log.e( source + '+' + str(context['index']) + ': each() cannot be used in combination with other specs', params )
+                elif 'each' in text_params.lower() and not re.fullmatch( r'each\(.+\)', text_params, re.IGNORECASE ):
+                    log.e( source + '+' + str(context['index']) + ': invalid \'each\' syntax:', params )
                 else:
                     self._configurations.append( params )
             elif directive == 'priority':
@@ -537,14 +542,14 @@ def devices_by_test_config( test ):
     """
     for configuration in test.config.configurations:
         try:
-            serial_numbers = devices.by_configuration( configuration )
+            for serial_numbers in devices.by_configuration( configuration ):
+                yield configuration, serial_numbers
         except RuntimeError as e:
             if devices.acroname:
                 log.e( log.red + test.name + log.reset + ': ' + str(e) )
             else:
                 log.w( log.yellow + test.name + log.reset + ': ' + str(e) )
             continue
-        yield configuration, serial_numbers
 
 
 log.i( 'Logs in:', logdir )
@@ -558,7 +563,7 @@ def test_wrapper( test, configuration = None ):
     log_path = test.get_log()
     try:
         test.run_test( configuration = configuration, log_path = log_path )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         log.e( log.red + test.name + log.reset + ':', str(e) + configuration_str( configuration, prefix = ' ' ) )
     except subprocess.TimeoutExpired:
         log.e(log.red + test.name + log.reset + ':', configuration_str(configuration, suffix=' ') + 'timed out')
@@ -569,13 +574,15 @@ def test_wrapper( test, configuration = None ):
 
 
 # Run all tests
-if pyrs:
-    sys.path.append( pyrs_path )
-from rspy import devices
-devices.query()
-#
-# Under Travis, we'll have no devices and no acroname
-skip_live_tests = len(devices.all()) == 0  and  not devices.acroname
+list_only = list_tags or list_tests
+if not list_only:
+    if pyrs:
+        sys.path.append( pyrs_path )
+    from rspy import devices
+    devices.query()
+    #
+    # Under Travis, we'll have no devices and no acroname
+    skip_live_tests = len(devices.all()) == 0  and  not devices.acroname
 #
 log.reset_errors()
 tags = set()
@@ -592,11 +599,11 @@ for test in prioritize_tests( get_tests() ):
             continue
         #
         tags.update( test.config.tags )
-        #
         tests.append( test.name )
-        #
-        if list_tags or list_tests:
+        if list_only:
+            n_tests += 1
             continue
+        #
         if not test.is_live():
             test_wrapper( test )
             continue
@@ -627,7 +634,7 @@ if not n_tests:
     log.e( 'No unit-tests found!' )
     sys.exit(1)
 #
-if list_tags or list_tests:
+if list_only:
     if list_tags:
         print( "Available tags:" )
         for t in sorted( list( tags )):
