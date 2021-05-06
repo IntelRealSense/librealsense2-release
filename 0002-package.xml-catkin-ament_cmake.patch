@@ -1,4 +1,4 @@
-From 6ce987ebe5e076b3967a00fa7dc33a8907d1c7b9 Mon Sep 17 00:00:00 2001
+From e50e84b59742995137d850de470dd13a3029d027 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Mon, 5 Oct 2020 08:32:37 +0300
 Subject: [PATCH 2/3] package.xml: catkin->ament_cmake
@@ -8,7 +8,7 @@ Subject: [PATCH 2/3] package.xml: catkin->ament_cmake
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/package.xml b/package.xml
-index affccc0..c69f754 100644
+index 348c61a..70d2e96 100644
 --- a/package.xml
 +++ b/package.xml
 @@ -24,7 +24,7 @@
