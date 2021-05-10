@@ -1,0 +1,33 @@
+From cf9fdafeed95900cee3223645a99b7825822526a Mon Sep 17 00:00:00 2001
+From: doronhi <doron_hirshberg@hotmail.com>
+Date: Mon, 5 Oct 2020 08:32:37 +0300
+Subject: [PATCH 2/3] package.xml: catkin->ament_cmake
+
+---
+ package.xml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/package.xml b/package.xml
+index 1ede959..b7f709d 100644
+--- a/package.xml
++++ b/package.xml
+@@ -24,7 +24,7 @@
+ 
+   <license>Apache License, Version 2.0</license>
+ 
+-  <buildtool_depend>catkin</buildtool_depend>
++  <buildtool_depend>ament_cmake</buildtool_depend>
+ 
+   <build_depend>pkg-config</build_depend>
+ 
+@@ -34,6 +34,6 @@
+   <build_depend>udev</build_depend>
+ 
+   <export>
+-    <build_type>cmake</build_type>
++    <build_type>ament_cmake</build_type>
+   </export>
+ </package>
+-- 
+2.7.4
+
