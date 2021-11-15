@@ -1,35 +1,39 @@
-From 9bb6d663e732d9c11c92b53ee773b8a9af155cf5 Mon Sep 17 00:00:00 2001
+From 468562caeda450c7577378b2219f2fd6cea94a96 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Thu, 25 Jun 2020 02:26:56 -0700
 Subject: [PATCH] update flags: FORCE_RSUSB_BACKEND-ON(2)
 
 ---
- CMake/lrs_options.cmake | 6 +++---
- 1 file changed, 3 insertions(+), 3 deletions(-)
- mode change 100644 => 100755 CMake/lrs_options.cmake
+ CMake/lrs_options.cmake | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
-old mode 100644
-new mode 100755
-index 5ee4a6e..deefbf8
+index 2cefcf0..f63fce2 100644
 --- a/CMake/lrs_options.cmake
 +++ b/CMake/lrs_options.cmake
 @@ -1,4 +1,4 @@
 -option(ENABLE_CCACHE "Build with ccache." ON)
 +option(ENABLE_CCACHE "Build with ccache." OFF)
  option(BUILD_WITH_CUDA "Enable CUDA" OFF)
- option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples and tools. Implies BUILD_GLSL_EXTENSIONS" ON)
  option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
-@@ -12,7 +12,7 @@ option(COM_MULTITHREADED "Set OFF to initialize COM library with COINIT_APARTMEN
- option(BUILD_SHARED_LIBS "Build shared library" ON)
- option(BUILD_UNIT_TESTS "Build realsense unit tests. Note that when enabled, additional tests data set will be downloaded from a web server and stored in a temp directory" OFF)
+ option(BUILD_WITH_OPENMP "Use OpenMP" OFF)
+@@ -12,12 +12,12 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
+ option(BUILD_UNIT_TESTS "Build LibCI unit tests. If enabled, additional test data may be downloaded" OFF)
+ option(BUILD_LEGACY_LIVE_TEST "Build the live-test.exe test used in Travis. If enabled, additional test data may be downloaded" OFF)
  option(BUILD_INTERNAL_UNIT_TESTS "Test package for components under librealsense namespace, requires BUILD_SHARED_LIBS=OFF and BUILD_UNIT_TESTS=ON" OFF)
--option(BUILD_EXAMPLES "Build realsense examples and tools." ON)
-+option(BUILD_EXAMPLES "Build realsense examples and tools." OFF)
+-option(BUILD_EXAMPLES "Build examples (not including graphical examples -- see BUILD_GRAPHICAL_EXAMPLES)" ON)
+-option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Implies BUILD_GLSL_EXTENSIONS" ON)
++option(BUILD_EXAMPLES "Build examples (not including graphical examples -- see BUILD_GRAPHICAL_EXAMPLES)" OFF)
++option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Implies BUILD_GLSL_EXTENSIONS" OFF)
+ option(BUILD_CV_EXAMPLES "Build OpenCV examples" OFF)
+ option(BUILD_DLIB_EXAMPLES "Build DLIB examples - requires DLIB_DIR" OFF)
+ option(BUILD_PCL_EXAMPLES "Build PCL examples" OFF)
+-option(BUILD_TOOLS "Build tools (fw-updater, etc.) that are not examples" ON)
++option(BUILD_TOOLS "Build tools (fw-updater, etc.) that are not examples" OFF)
  option(ENFORCE_METADATA "Require WinSDK with Metadata support during compilation. Windows OS Only" OFF)
  option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
  option(BUILD_PYTHON_DOCS "Build Documentation for Python bindings" OFF)
-@@ -28,7 +28,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
+@@ -30,7 +30,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
  option(BUILD_OPENNI2_BINDINGS "Build OpenNI bindings" OFF)
  option(IMPORT_DEPTH_CAM_FW "Download the latest firmware for the depth cameras" ON)
  option(BUILD_CV_KINFU_EXAMPLE "Build OpenCV KinectFusion example" OFF)
