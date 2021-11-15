@@ -35,6 +35,7 @@ The library will be compiled without the metadata support!\n")
 #include <vidcap.h>
 #include <ksmedia.h>    // Metadata Extension
 #include <Mferror.h>
+#include "../common/utilities/os/hresult.h"
 
 #pragma comment(lib, "Shlwapi.lib")
 #pragma comment(lib, "mf.lib")
@@ -47,6 +48,7 @@ The library will be compiled without the metadata support!\n")
 
 #define DEVICE_NOT_READY_ERROR _HRESULT_TYPEDEF_(0x80070015L)
 #define MF_E_SHUTDOWN_ERROR _HRESULT_TYPEDEF_(0xC00D3E85)
+#define SEMAPHORE_TIMEOUT_ERROR _HRESULT_TYPEDEF_(0x80070079L)
 
 #define MAX_PINS 5
 
@@ -54,7 +56,6 @@ namespace librealsense
 {
     namespace platform
     {
-
 #ifdef METADATA_SUPPORT
 
 #pragma pack(push, 1)
@@ -267,7 +268,7 @@ namespace librealsense
                 reinterpret_cast<void **>(&ks_topology_info)));
 
             DWORD nNodes=0;
-            check("get_NumNodes", ks_topology_info->get_NumNodes(&nNodes));
+            LOG_HR_STR("get_NumNodes", ks_topology_info->get_NumNodes(&nNodes));
 
             CComPtr<IUnknown> unknown = nullptr;
             CHECK_HR(ks_topology_info->CreateNodeInstance(xu.node, IID_IUnknown,
@@ -616,8 +617,18 @@ namespace librealsense
                     else
                     {
                         auto hr = get_video_proc()->Set(pu.property, value, VideoProcAmp_Flags_Manual);
-                        if (hr == DEVICE_NOT_READY_ERROR)
+
+                        // We found 2 cases when we want to return false and let the backend retry mechanism call another set command.
+                        // DEVICE_NOT_READY_ERROR: Can be return if the device is busy, not a real error.
+                        // SEMAPHORE_TIMEOUT_ERROR: We get this error at a very low statistics when setting multiple PU commands (i.e. gain command)
+                        // It is not expected but we decided to raise a log_debug and allow a retry on that case [DSO-17181].
+                        if( hr == DEVICE_NOT_READY_ERROR || hr == SEMAPHORE_TIMEOUT_ERROR )
+                        {
+                            if( hr == SEMAPHORE_TIMEOUT_ERROR )
+                                LOG_DEBUG( "set_pu returned error code: "
+                                           << utilities::hresult::hr_to_string( hr ) );
                             return false;
+                        }
 
                         CHECK_HR(hr);
                     }
@@ -729,7 +740,7 @@ namespace librealsense
 
                     WCHAR * wchar_name = nullptr; UINT32 length;
                     CHECK_HR(pDevice->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &wchar_name, &length));
-                    auto name = win_to_utf(wchar_name);
+                    auto name = utilities::string::windows::win_to_utf(wchar_name);
                     CoTaskMemFree(wchar_name);
 
                     uint16_t vid, pid, mi; std::string unique_id, guid;
@@ -891,7 +902,7 @@ namespace librealsense
                     {
                         safe_release(pMediaType);
                         if (hr != MF_E_NO_MORE_TYPES) // An object ran out of media types to suggest therefore the requested chain of streaming objects cannot be completed
-                            check("_reader->GetNativeMediaType(sIndex, k, &pMediaType.p)", hr, false);
+                            LOG_HR_STR("_reader->GetNativeMediaType(sIndex, k, &pMediaType.p)",hr);
 
                         break;
                     }
@@ -1003,7 +1014,7 @@ namespace librealsense
                                 const auto timeout_ms = RS2_DEFAULT_TIMEOUT;
                                 if (_has_started.wait(timeout_ms))
                                 {
-                                    check("_reader->ReadSample(...)", _readsample_result);
+                                    LOG_HR_STR("_reader->ReadSample(...)", _readsample_result);
                                 }
                                 else
                                 {

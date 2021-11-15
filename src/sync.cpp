@@ -152,7 +152,6 @@ namespace librealsense
             LOG_ERROR( "didn't find any matcher; releasing unsynchronized frame " << *f.frame );
             _callback(std::move(f), env);
         }
-        
     }
 
     std::shared_ptr<matcher> composite_matcher::find_matcher(const frame_holder& frame)
@@ -196,6 +195,7 @@ namespace librealsense
             {
                 dev_exist = true;
                 matcher = dev->create_matcher(frame);
+                LOG_DEBUG( "... created " << matcher->get_name() );
 
                 matcher->set_callback(
                     [&]( frame_holder f, syncronization_environment const & env ) {
@@ -256,9 +256,17 @@ namespace librealsense
 
     void composite_matcher::stop()
     {
+        // We don't want to stop while dispatching!
+        std::lock_guard<std::mutex> lock( _mutex );
+
+        // Mark ourselves inactive, so we don't get new dispatches
         set_active( false );
+
+        // Stop all our queues to wake up anyone waiting on them
         for( auto & fq : _frames_queue )
             fq.second.stop();
+
+        // Trickle the stop down to any children
         for( auto m : _matchers )
             m.second->stop();
     }
@@ -276,19 +284,20 @@ namespace librealsense
         composite_matcher::matchers_to_string( std::vector< librealsense::matcher* > const& matchers )
     {
         std::string str;
+        str += '[';
         for( auto m : matchers )
         {
-            frame_holder* f;
-            if( _frames_queue[m].peek( &f ) )
-                str += frame_to_string( *f->frame );
+            auto const & q = _frames_queue[m];
+            q.peek( [&str]( frame_holder const & fh ) {
+                str += frame_to_string( *fh.frame );
+                } );
         }
+        str += ']';
         return str;
     }
 
     void composite_matcher::sync(frame_holder f, const syncronization_environment& env)
     {
-        //LOG_IF_ENABLE( "SYNC " << _name, env );
-
         auto matcher = find_matcher(f);
         if (!matcher)
         {
@@ -298,17 +307,24 @@ namespace librealsense
         }
         update_next_expected( matcher, f );
 
-        _frames_queue[matcher.get()].enqueue(std::move(f));
+        // We want to keep track of a "last-arrived" frame which is our current equivalent of "now" -- it contains the
+        // latest timestamp/frame-number/etc. that we can compare to.
+        auto const last_arrived = f->get_header();
+
+        if( ! _frames_queue[matcher.get()].enqueue( std::move( f ) ) )
+            // If we get stopped, nothing to do!
+            return;
 
         // We have a queue for each known stream we want to sync.
         // E.g., for (Depth Color), we need to sync two frames, one from each.
         // If we have a Color frame but not Depth, then Depth is "missing" and needs to be
         // waited-for...
 
-        std::vector<frame_holder*> frames_arrived;
-        std::vector<librealsense::matcher*> frames_arrived_matchers;
-        std::vector<librealsense::matcher*> synced_frames;
-        std::vector<librealsense::matcher*> missing_streams;
+        std::vector< frame_holder * > frames_arrived;
+        std::vector< librealsense::matcher * > frames_arrived_matchers;
+        std::vector< int > synced_frames;
+        std::vector< int > unsynced_frames;
+        std::vector< librealsense::matcher * > missing_streams;
 
         while( true )
         {
@@ -316,103 +332,110 @@ namespace librealsense
             frames_arrived_matchers.clear();
             frames_arrived.clear();
 
-            for (auto s = _frames_queue.begin(); s != _frames_queue.end(); s++)
+            std::vector< frame_holder > match;
             {
-                librealsense::matcher * const m = s->first;
-                frame_holder* f;
-                if (s->second.peek(&f))
-                {
-                    LOG_IF_ENABLE( "... have " << *f->frame, env );
-                    frames_arrived.push_back( f );
-                    frames_arrived_matchers.push_back( m );
-                }
-                else
-                {
-                    missing_streams.push_back( m );
-                }
-            }
+                // We don't want to stop while syncing!
+                std::lock_guard< std::mutex > lock( _mutex );
 
-            if( frames_arrived.empty() )
-            {
-                //LOG_IF_ENABLE( "... nothing more to do", env );
-                break;
-            }
-
-            // Check that everything we have matches together
-
-            frame_holder * curr_sync = frames_arrived[0];
-            synced_frames.clear();
-            synced_frames.push_back( frames_arrived_matchers[0] );
-
-            auto old_frames = false;
-            for (auto i = 1; i < frames_arrived.size(); i++)
-            {
-                if (are_equivalent(*curr_sync, *frames_arrived[i]))
+                // We want to release one frame from each matcher. If a matcher has nothing queued, it is "missing" and
+                // we need to consider waiting for it:
+                for( auto s = _frames_queue.begin(); s != _frames_queue.end(); s++ )
                 {
-                    synced_frames.push_back(frames_arrived_matchers[i]);
-                }
-                else if (is_smaller_than(*frames_arrived[i], *curr_sync))
-                {
-                    old_frames = true;
-                    synced_frames.clear();
-                    synced_frames.push_back(frames_arrived_matchers[i]);
-                    curr_sync = frames_arrived[i];
-                }
-                else
-                {
-                    old_frames = true;
-                }
-            }
-            bool release_synced_frames = ( synced_frames.size() != 0 );
-            if (!old_frames)
-            {
-                // Everything (could be only one!) matches together... but if we also have something missing, we can't
-                // release anything yet...
-                for (auto i : missing_streams)
-                {
-                    LOG_IF_ENABLE( "... missing " << i->get_name() << ", next expected " << _next_expected[i], env );
-                    if( skip_missing_stream( synced_frames, i, env ) )
+                    librealsense::matcher * const m = s->first;
+                    if( ! s->second.peek( [&]( frame_holder & fh ) {
+                            LOG_IF_ENABLE( "... have " << *fh.frame, env );
+                            frames_arrived.push_back( &fh );
+                            frames_arrived_matchers.push_back( m );
+                        } ) )
                     {
-                        LOG_IF_ENABLE( "...     ignoring it", env );
-                        continue;
+                        missing_streams.push_back( m );
                     }
-
-                    LOG_IF_ENABLE( "...     waiting for it", env );
-                    release_synced_frames = false;
                 }
-            }
-            else
-            {
-                LOG_IF_ENABLE( "old frames; ignoring missing "
-                                   << matchers_to_string( missing_streams ),
-                               env );
-            }
-            if( ! release_synced_frames )
-                break;
-
-            std::vector<frame_holder> match;
-            match.reserve(synced_frames.size());
-
-            for (auto index : synced_frames)
-            {
-                frame_holder frame;
-                int timeout_ms = 5000;
-                _frames_queue[index].dequeue(&frame, timeout_ms);
-                if (old_frames)
+                if( frames_arrived.empty() )
                 {
-                    LOG_IF_ENABLE("--> " << frame_holder_to_string(frame), env);
+                    // LOG_IF_ENABLE( "... nothing more to do", env );
+                    break;
                 }
-                match.push_back(std::move(frame));
+
+                // From what we collected, we want to release only the frames that are synchronized (based on timestamp,
+                // number, etc.) -- anything else we'll leave to the next iteration. The synced frames should be the
+                // earliest possible!
+
+                frame_holder * curr_sync = frames_arrived[0];
+                synced_frames.clear();
+                synced_frames.push_back( 0 );
+
+                // Sometimes we have to release newly-arrived frames even before frames we already had previously
+                // queued. If we have something like this, 'have_unsynced_frames' will be true:
+                unsynced_frames.clear();
+                for( auto i = 1; i < frames_arrived.size(); i++ )
+                {
+                    if( are_equivalent( *curr_sync, *frames_arrived[i] ) )
+                    {
+                        synced_frames.push_back( i );
+                    }
+                    else if( is_smaller_than( *frames_arrived[i], *curr_sync ) )
+                    {
+                        unsynced_frames.insert( unsynced_frames.end(), synced_frames.begin(), synced_frames.end() );
+                        synced_frames.clear();
+                        synced_frames.push_back( i );
+                        curr_sync = frames_arrived[i];
+                    }
+                    else
+                    {
+                        unsynced_frames.push_back( i );
+                    }
+                }
+                bool release_synced_frames = ( synced_frames.size() != 0 );
+                if( unsynced_frames.empty() )
+                {
+                    // Everything (could be only one!) matches together... but if we also have
+                    // something missing, we can't release anything yet...
+                    for( auto i : missing_streams )
+                    {
+                        LOG_IF_ENABLE( "... missing " << i->get_name() << ", next expected "
+                                                      << _next_expected[i],
+                                       env );
+                        if( skip_missing_stream( *curr_sync, i, last_arrived, env ) )
+                        {
+                            LOG_IF_ENABLE( "...     ignoring it", env );
+                            continue;
+                        }
+
+                        LOG_IF_ENABLE( "...     waiting for it", env );
+                        release_synced_frames = false;
+                    }
+                }
+                else
+                {
+                    for( auto i : unsynced_frames )
+                    {
+                        LOG_IF_ENABLE( "  - " << *frames_arrived[i]->frame << " is not in sync; won't be released", env );
+                    }
+                }
+                if( ! release_synced_frames )
+                    break;
+
+                match.reserve( synced_frames.size() );
+
+                for( auto index : synced_frames )
+                {
+                    frame_holder frame;
+                    int const timeout_ms = 5000;
+                    librealsense::matcher * m = frames_arrived_matchers[index];
+                    _frames_queue[m].dequeue( &frame, timeout_ms );
+                    match.push_back( std::move( frame ) );
+                }
             }
 
             // The frameset should always be with the same order of streams (the first stream carries extra
             // meaning because it decides the frameset properties) -- so we sort them...
             std::sort( match.begin(),
-                        match.end(),
-                        []( const frame_holder & f1, const frame_holder & f2 ) {
-                            return ( (frame_interface *)f1 )->get_stream()->get_unique_id()
-                                > ( (frame_interface *)f2 )->get_stream()->get_unique_id();
-                        } );
+                       match.end(),
+                       []( const frame_holder & f1, const frame_holder & f2 ) {
+                           return f1.frame->get_stream()->get_unique_id()
+                                > f2.frame->get_stream()->get_unique_id();
+                       } );
 
 
             frame_holder composite = env.source->allocate_composite_frame(std::move(match));
@@ -473,20 +496,17 @@ namespace librealsense
     }
 
     bool
-    frame_number_composite_matcher::skip_missing_stream( std::vector< matcher * > const & synced,
+    frame_number_composite_matcher::skip_missing_stream( frame_interface const * const synced_frame,
                                                          matcher * missing,
+                                                         frame_header const & last_arrived,
                                                          const syncronization_environment & env )
     {
-        frame_holder* synced_frame;
-
          if(!missing->get_active())
              return true;
 
-        _frames_queue[synced[0]].peek(&synced_frame);
-
         auto next_expected = _next_expected[missing];
 
-        if((*synced_frame)->get_frame_number() - next_expected > 4 || (*synced_frame)->get_frame_number() < next_expected)
+        if(synced_frame->get_frame_number() - next_expected > 4 || synced_frame->get_frame_number() < next_expected)
         {
             return true;
         }
@@ -551,12 +571,12 @@ namespace librealsense
         _last_arrived[m] = now;
     }
 
-    unsigned int timestamp_composite_matcher::get_fps(const frame_holder & f)
+    unsigned int timestamp_composite_matcher::get_fps( frame_interface const * f )
     {
         uint32_t fps = 0;
-        if(f.frame->supports_frame_metadata(RS2_FRAME_METADATA_ACTUAL_FPS))
+        if(f->supports_frame_metadata(RS2_FRAME_METADATA_ACTUAL_FPS))
         {
-            fps = (uint32_t)f.frame->get_frame_metadata(RS2_FRAME_METADATA_ACTUAL_FPS);
+            fps = (uint32_t)f->get_frame_metadata(RS2_FRAME_METADATA_ACTUAL_FPS);
         }
         if( fps )
         {
@@ -564,7 +584,7 @@ namespace librealsense
         }
         else
         {
-            fps = f.frame->get_stream()->get_framerate();
+            fps = f->get_stream()->get_framerate();
             //LOG_DEBUG( "fps " << fps << " from stream framerate" );
         }
         return fps;
@@ -589,8 +609,9 @@ namespace librealsense
         // We let skip_missing_stream clean any inactive missing streams
     }
 
-    bool timestamp_composite_matcher::skip_missing_stream( std::vector< matcher * > const & synced,
+    bool timestamp_composite_matcher::skip_missing_stream( frame_interface const * waiting_to_be_released,
                                                            matcher * missing,
+                                                           frame_header const & last_arrived,
                                                            const syncronization_environment & env )
     {
         // true : frameset is ready despite the missing stream (no use waiting) -- "skip" it
@@ -599,38 +620,79 @@ namespace librealsense
         if(!missing->get_active())
             return true;
 
-        frame_holder* synced_frame;
-
         //LOG_IF_ENABLE( "...     matcher " << synced[0]->get_name(), env );
-        _frames_queue[synced[0]].peek(&synced_frame);
-        //LOG_IF_ENABLE( "...     frame   " << *synced_frame->frame, env );
 
         auto next_expected = _next_expected[missing];
-        //LOG_IF_ENABLE( "...     next    " << std::fixed << next_expected, env );
+        // LOG_IF_ENABLE( "...     next    " << std::fixed << next_expected, env );
 
-        auto it = _next_expected_domain.find(missing);
-        if (it != _next_expected_domain.end())
+        auto it = _next_expected_domain.find( missing );
+        if( it != _next_expected_domain.end() )
         {
-            if (it->second != (*synced_frame)->get_frame_timestamp_domain())
+            if( it->second != last_arrived.timestamp_domain )
             {
-                //LOG_IF_ENABLE( "...     not the same domain: frameset not ready!", env );
+                // LOG_IF_ENABLE( "...     not the same domain: frameset not ready!", env );
                 return false;
             }
         }
-        //next expected of the missing stream didn't updated yet
-        auto timestamp = (*synced_frame)->get_frame_timestamp();
-        if( timestamp > next_expected )
+
+        // We want to calculate a cutout for inactive stream detection: if we wait too long past
+        // this cutout, then the missing stream is inactive and we no longer wait for it.
+        // 
+        //     cutout = next expected + threshold
+        //     threshold = 7 * gap = 7 * (1000 / FPS)
+        // 
+        // 
+        // E.g.:
+        // 
+        //     D: 100 fps ->  10 ms gap
+        //     C: 10 fps  -> 100 ms gap
+        // 
+        //     D  C  @timestamp
+        //     -- -- ----------
+        //     1     0   -> release (we don't know about a missing stream yet, so don't get here)
+        //       ...
+        //     6     50  -> release (D6); next expected (NE) -> 60
+        //        1  0   -> release (C1); NE -> 100                                  <----- LATENCY
+        //     7  ?  60  -> release (D7) (not comparable to NE because we use fps of 100!)
+        //       ...
+        //     11 ?  100 -> wait for C (now comparable); cutout is 100+7*10 = 170
+        //     12 ?  110 -> wait (> NE, < cutout)
+        //       ...
+        //     19 ?  180 > 170 -> release (D11); mark C inactive (> cutout)
+        //                        release (D12) ... (D19)  (no missing streams, so don't get here)
+        //     20    190 -> release (D20) (no missing streams, so don't get here)
+        //       ...
+        // 
+        // But, if C had arrived before D19:
+        // 
+        //       ...
+        //        2  100 -> release (D11, C2) (nothing missing); NE -> 200
+        //        ?         release (D12) ... (D18) (C missing but 100 not comparable to NE 200)
+        //     19 ?  180 -> release (D19)
+        //     20 ?  190 -> release (D20)
+        //     21 ?  200 -> wait for C (comparable to NE 200)
+        // 
+        // 
+        // The threshold is a function of the FPS, but note we can't keep more frames than
+        // our queue size and per-stream archive size allow.
+        auto const fps = get_fps( waiting_to_be_released );
+
+        rs2_time_t now = last_arrived.timestamp;
+        if( now > next_expected )
         {
-            // Wait up to 10*gap for the missing stream frame to arrive -- anything more and we let
-            // the frameset be ready without it...
-            auto gap = 1000.f / (float)get_fps( *synced_frame );
-            auto threshold = 10 * gap;
-            if( timestamp - next_expected < threshold )
+            // Wait for the missing stream frame to arrive -- up to a cutout: anything more and we
+            // let the frameset be ready without it...
+            auto gap = 1000.f / fps;
+            // NOTE: the threshold is a function of the gap; the bigger it is, the more latency
+            // between the streams we're willing to live with. Each gap is a frame so we are limited
+            // by the number of frames we're willing to keep (which is our queue limit)
+            auto threshold = 7 * gap;  // really 7+1 because NE is already 1 away
+            if( now - next_expected < threshold )
             {
-                //LOG_IF_ENABLE( "...     next expected of the missing stream didn't updated yet", env );
+                //LOG_IF_ENABLE( "...     still below cutout of {NE+7*gap}" << ( next_expected + threshold ), env );
                 return false;
             }
-            LOG_IF_ENABLE( "...     exceeded threshold of {10*gap}" << threshold << "; deactivating matcher!", env );
+            LOG_IF_ENABLE( "...     exceeded cutout of {NE+7*gap}" << ( next_expected + threshold ) << "; deactivating matcher!", env );
 
             auto const q_it = _frames_queue.find( missing );
             if( q_it != _frames_queue.end() )
@@ -639,12 +701,15 @@ namespace librealsense
                     _frames_queue.erase( q_it );
             }
             missing->set_active( false );
+            return true;
         }
 
-        return ! are_equivalent( timestamp, next_expected, get_fps( *synced_frame ) );
+        return ! are_equivalent( waiting_to_be_released->get_frame_timestamp(),
+                                 next_expected,
+                                 fps );  // should be min fps to match behavior elsewhere?
     }
 
-    bool timestamp_composite_matcher::are_equivalent(double a, double b, int fps)
+    bool timestamp_composite_matcher::are_equivalent( double a, double b, unsigned int fps )
     {
         float gap = 1000.f / fps;
         return abs(a - b) < (gap / 2);
