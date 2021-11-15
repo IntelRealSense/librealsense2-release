@@ -110,15 +110,15 @@ namespace rs2
         bool use_glsl = false;
 
         // Absolutely arbitrary list of manufacturers that are likely to benefit from GLSL optimisation
-        if (starts_with(to_lower(vendor), "intel") ||
-            starts_with(to_lower(vendor), "ati") ||
-            starts_with(to_lower(vendor), "nvidia"))
+        if (starts_with(utilities::string::to_lower(vendor), "intel") ||
+            starts_with(utilities::string::to_lower(vendor), "ati") ||
+            starts_with(utilities::string::to_lower(vendor), "nvidia"))
         {
             use_glsl = true;
         }
 
         // Double-check that GLSL 1.3+ is supported
-        if (starts_with(to_lower(vendor), "1.1") || starts_with(to_lower(vendor), "1.2"))
+        if (starts_with(utilities::string::to_lower(vendor), "1.1") || starts_with(utilities::string::to_lower(vendor), "1.2"))
         {
             use_glsl = false;
         }
@@ -349,13 +349,16 @@ namespace rs2
             config_file::instance().set(configurations::window::position_y, y);
         });
 
-        glfwSetWindowSizeCallback(_win, [](GLFWwindow* window, int width, int height)
-        {
-            config_file::instance().set(configurations::window::saved_size, true);
-            config_file::instance().set(configurations::window::width, width);
-            config_file::instance().set(configurations::window::height, height);
-            config_file::instance().set(configurations::window::maximized, glfwGetWindowAttrib(window, GLFW_MAXIMIZED));
-        });
+        glfwSetWindowSizeCallback( _win, []( GLFWwindow * window, int width, int height ) {
+            if( width > 0 && height > 0 )
+            {
+                config_file::instance().set( configurations::window::saved_size, true );
+                config_file::instance().set( configurations::window::width, width );
+                config_file::instance().set( configurations::window::height, height );
+                config_file::instance().set( configurations::window::maximized,
+                                             glfwGetWindowAttrib( window, GLFW_MAXIMIZED ) );
+            }
+        } );
 
         setup_icon();
 
@@ -484,7 +487,7 @@ namespace rs2
         if (_query_devices && do_200ms)
         {
             _missing_device = _ctx.query_devices(RS2_PRODUCT_LINE_ANY_INTEL).size() == 0;
-            _hourglass_index = (_hourglass_index + 1) % 5;
+            _hourglass_index = (_hourglass_index + 1) % 4;
 
             if (!_missing_device)
             {
