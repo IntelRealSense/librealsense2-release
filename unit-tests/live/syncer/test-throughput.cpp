@@ -2,17 +2,19 @@
 // Copyright(c) 2021 Intel Corporation. All Rights Reserved.
 
 //#cmake: static!
-//#test:device D400*
+//#test:device D435
 
 
-#include <stdlib.h> 
-#include "../../catch.h"
-#include "../../unit-tests-common.h"
+#include <unit-tests/test.h>
+#include "../live-common.h"
 
 using namespace rs2;
-constexpr int RECEIVE_FRAMES_TIME = 10;
 
-TEST_CASE("Syncer dynamic FPS - throughput test", "[live]")
+constexpr int RECEIVE_FRAMES_TIME = 10;
+constexpr float LOW_FPS = 30;
+constexpr float HIGH_FPS = 60;
+
+TEST_CASE( "Syncer dynamic FPS - throughput test" )
 {
     typedef enum configuration
     {
@@ -101,7 +103,7 @@ TEST_CASE("Syncer dynamic FPS - throughput test", "[live]")
             {
                 if (!exposure_set && delta > RECEIVE_FRAMES_TIME / 2)
                 {
-                    set_ir_exposure(); // set exposure to 18000 after 5 sec, set to 60000 to get fps = 15
+                    set_ir_exposure(); // set exposure to 18000 after 5 sec to get fps = 30, set to 60000 to get fps = 15
                     exposure_set = true;
                 }
                 auto fs = _sync.wait_for_frames();
@@ -117,39 +119,34 @@ TEST_CASE("Syncer dynamic FPS - throughput test", "[live]")
         {
             if (frames_arrival_info.empty())
                 return;
-            float fps = 0.0f;
-            while (!frames_arrival_info.empty() && fps < 10) // skip unstable frames at the beginning
-            {
-                fps = frames_arrival_info.front().second;
-                frames_arrival_info.erase(frames_arrival_info.begin());
-            }
-            if (frames_arrival_info.size() < 10 || fps < 1.0f)
-                return;
             std::vector<std::pair<float, float>>  vec[2]; // separate frames according to fps (before and after setting exposure)
+            std::vector<std::pair<float, float>> extra_frames; // frames with unstable fps are received after changing exposure
             for (auto& frm : frames_arrival_info)
             { 
-                auto fps_ratio = frm.second / fps; // used ratio instead of precised fps because syncer doesn't change fps to exact value when running RGB
-                if (fps_ratio > 0.9)
+                // used ratio instead of precised fps because syncer doesn't change fps to exact value when running RGB
+                if (frm.second / HIGH_FPS > 0.9)
                     vec[0].push_back(frm);
-                else
+                else if (frm.second / LOW_FPS > 0.9)
                     vec[1].push_back(frm);
+                else
+                    extra_frames.push_back(frm);
             }
 
             int i = 0;
             for (auto& v : vec)
             {
-                if (v.empty())
+                if (v.size() < 10)
                     continue;
                 auto dt = (v.back().first - v.front().first)/ 1000000;
                 auto actual_fps = v.front().second;
                 float calc_fps = (float)v.size() / dt;
-                float fps_ratio = calc_fps / actual_fps;
+                float fps_ratio = fabs(1 - calc_fps / actual_fps);
                 CAPTURE(stream_type, actual_fps, calc_fps, v.size());
-                CHECK(fps_ratio > 0.9);
-                CHECK(fps_ratio < 1.3);
+                CHECK(fps_ratio < 0.1);
                 check_frame_drops(v);
                 i += 1;
             }
+            CHECK(extra_frames.size() / frames_arrival_info.size() < 0.1);
         }
         void check_frame_drops(std::vector<std::pair<float, float>> frames)
         {
@@ -184,18 +181,8 @@ TEST_CASE("Syncer dynamic FPS - throughput test", "[live]")
     };
 
     // Require at least one device to be plugged in
-    rs2::context ctx;
-    auto list = ctx.query_devices();
-    REQUIRE(list.size());
-    auto dev = list.front();
+    auto dev = find_first_device_or_exit();
     auto sensors = dev.query_sensors();
-    REQUIRE(dev.supports(RS2_CAMERA_INFO_PRODUCT_LINE));
-    std::string device_type = list.front().get_info(RS2_CAMERA_INFO_PRODUCT_LINE);
-    if (device_type != "D400")
-    {
-        std::cout << "This test runs only with D400 device!"<< std::endl;
-        exit(EXIT_SUCCESS);
-    }
     int width = 848;
     int height = 480;
 
@@ -207,6 +194,10 @@ TEST_CASE("Syncer dynamic FPS - throughput test", "[live]")
     for (auto& s : sensors)
     {
         auto info = std::string(s.get_info(RS2_CAMERA_INFO_NAME));
+        if( info == "RGB Camera" )
+            rgb_sensor = s;
+        if( info == "Stereo Module" )
+            ir_sensor = s;
         auto stream_profiles = s.get_stream_profiles();
         for (auto& sp : stream_profiles)
         {
@@ -218,20 +209,15 @@ TEST_CASE("Syncer dynamic FPS - throughput test", "[live]")
                 ir_stream_profile.push_back(sp);
         }
         if (s.supports(RS2_OPTION_GLOBAL_TIME_ENABLED))
-        {
             s.set_option(RS2_OPTION_GLOBAL_TIME_ENABLED, 0);
-            if (info == "RGB Camera")
-                rgb_sensor = s;
+    }
+    REQUIRE( rgb_sensor );
+    REQUIRE( ir_sensor );
+    if (ir_sensor.supports(RS2_OPTION_ENABLE_AUTO_EXPOSURE))
+        ir_sensor.set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, false);
+    if (rgb_sensor.supports(RS2_OPTION_ENABLE_AUTO_EXPOSURE))
+        rgb_sensor.set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, false);
 
-            if (info == "Stereo Module")
-                ir_sensor = s;
-        }
-    }
-    if (rgb_sensor == NULL || ir_sensor == NULL)
-    {
-        std::cout << "ERROR : sensors are not valid!" << std::endl;
-        exit(EXIT_FAILURE);
-    }
     // test configurations
     configuration tests[2] = { IR_ONLY, IR_RGB_EXPOSURE }; // {cfg, exposure}
     for (auto& test : tests)

@@ -1,7 +1,12 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2017 Intel Corporation. All Rights Reserved.
-#include <glad/glad.h>
 
+#include "fw-update-helper.h"
+#include "model-views.h"
+#include "viewer.h"
+#include "ux-window.h"
+
+#include "os.h"
 
 #include <map>
 #include <vector>
@@ -9,23 +14,21 @@
 #include <thread>
 #include <condition_variable>
 
-#include "fw-update-helper.h"
-#include "model-views.h"
-#include "viewer.h"
-
-#include "os.h"
-
 #ifdef INTERNAL_FW
 #include "common/fw/D4XX_FW_Image.h"
 #include "common/fw/SR3XX_FW_Image.h"
-#include "common/fw/L5XX_FW_Image.h"
+#include "common/fw/L51X_FW_Image.h"
+#include "common/fw/L53X_FW_Image.h"
 #else
 #define FW_D4XX_FW_IMAGE_VERSION ""
 #define FW_SR3XX_FW_IMAGE_VERSION ""
-#define FW_L5XX_FW_IMAGE_VERSION ""
+#define FW_L51X_FW_IMAGE_VERSION ""
+#define FW_L53X_FW_IMAGE_VERSION ""
 const char* fw_get_D4XX_FW_Image(int) { return NULL; }
 const char* fw_get_SR3XX_FW_Image(int) { return NULL; }
-const char* fw_get_L5XX_FW_Image(int) { return NULL; }
+const char* fw_get_L51X_FW_Image(int) { return NULL; }
+const char* fw_get_L53X_FW_Image(int) { return NULL; }
+
 
 #endif // INTERNAL_FW
 
@@ -41,60 +44,79 @@ namespace rs2
         RS2_FWU_STATE_FAILED = 3,
     };
 
-    bool is_recommended_fw_available(std::string id)
+    bool is_recommended_fw_available(const std::string& product_line, const std::string& pid)
     {
-        auto pl = parse_product_line(id);
-        auto fv = get_available_firmware_version(pl);
+        auto pl = parse_product_line(product_line);
+        auto fv = get_available_firmware_version(pl, pid);
         return !(fv == "");
     }
 
-    int parse_product_line(std::string id)
+    int parse_product_line(const std::string& product_line)
     {
-        if (id == "D400") return RS2_PRODUCT_LINE_D400;
-        else if (id == "SR300") return RS2_PRODUCT_LINE_SR300;
-        else if (id == "L500") return RS2_PRODUCT_LINE_L500;
+        if (product_line == "D400") return RS2_PRODUCT_LINE_D400;
+        else if (product_line == "SR300") return RS2_PRODUCT_LINE_SR300;
+        else if (product_line == "L500") return RS2_PRODUCT_LINE_L500;
         else return -1;
     }
 
-    std::string get_available_firmware_version(int product_line)
+    std::string get_available_firmware_version(int product_line, const std::string& pid)
     {
         if (product_line == RS2_PRODUCT_LINE_D400) return FW_D4XX_FW_IMAGE_VERSION;
         //else if (product_line == RS2_PRODUCT_LINE_SR300) return FW_SR3XX_FW_IMAGE_VERSION;
-        else if (product_line == RS2_PRODUCT_LINE_L500) return FW_L5XX_FW_IMAGE_VERSION;
+        else if (product_line == RS2_PRODUCT_LINE_L500 && pid == "0B68") return FW_L53X_FW_IMAGE_VERSION;
+        else if (product_line == RS2_PRODUCT_LINE_L500) return FW_L51X_FW_IMAGE_VERSION;
         else return "";
     }
 
-    std::map<int, std::vector<uint8_t>> create_default_fw_table()
+    std::vector< uint8_t > get_default_fw_image( int product_line, const std::string & pid )
     {
-        bool allow_rc_firmware = config_file::instance().get_or_default(configurations::update::allow_rc_firmware, false);
+        std::vector< uint8_t > image;
 
-        std::map<int, std::vector<uint8_t>> rv;
-
-        if (strlen(FW_D4XX_FW_IMAGE_VERSION) && !allow_rc_firmware)
+        switch( product_line )
         {
-            int size = 0;
-            auto hex = fw_get_D4XX_FW_Image(size);
-            auto vec = std::vector<uint8_t>(hex, hex + size);
-            rv[RS2_PRODUCT_LINE_D400] = vec;
-        }
-
-        if (strlen(FW_SR3XX_FW_IMAGE_VERSION))
+        case RS2_PRODUCT_LINE_D400: 
         {
-            int size = 0;
-            auto hex = fw_get_SR3XX_FW_Image(size);
-            auto vec = std::vector<uint8_t>(hex, hex + size);
-            rv[RS2_PRODUCT_LINE_SR300] = vec;
+            bool allow_rc_firmware = config_file::instance().get_or_default( configurations::update::allow_rc_firmware, false );
+            if( strlen( FW_D4XX_FW_IMAGE_VERSION ) && ! allow_rc_firmware )
+            {
+                int size = 0;
+                auto hex = fw_get_D4XX_FW_Image( size );
+                image = std::vector< uint8_t >( hex, hex + size );
+            }
         }
-
-        if (strlen(FW_L5XX_FW_IMAGE_VERSION))
-        {
-            int size = 0;
-            auto hex = fw_get_L5XX_FW_Image(size);
-            auto vec = std::vector<uint8_t>(hex, hex + size);
-            rv[RS2_PRODUCT_LINE_L500] = vec;
+        break;
+        case RS2_PRODUCT_LINE_SR300:
+            if( strlen( FW_SR3XX_FW_IMAGE_VERSION ) )
+            {
+                int size = 0;
+                auto hex = fw_get_SR3XX_FW_Image( size );
+                image = std::vector< uint8_t >( hex, hex + size );
+            }
+            break;
+        case RS2_PRODUCT_LINE_L500:
+            if( pid == "0B68" || pid == "0B72" )  // L535 || L535 Recovery
+            {
+                if( strlen( FW_L53X_FW_IMAGE_VERSION ) )
+                {
+                    int size = 0;
+                    auto hex = fw_get_L53X_FW_Image( size );
+                    image = std::vector< uint8_t >( hex, hex + size );
+                }
+            }
+            else
+            {  // default for all L515 use cases (include recovery usb2 old pid)
+                if( strlen( FW_L51X_FW_IMAGE_VERSION ) )
+                {
+                    int size = 0;
+                    auto hex = fw_get_L51X_FW_Image( size );
+                    image = std::vector< uint8_t >( hex, hex + size );
+                }
+            }
+            break;
+        default:
+            break;
         }
-
-        return rv;
+        return image;
     }
 
     std::vector<int> parse_fw_version(const std::string& fw)
@@ -225,7 +247,7 @@ namespace rs2
             {
                 auto flash = upd.create_flash_backup([&](const float progress)
                 {
-                    _progress = int((ceil(progress * 5) / 5) * (30 - next_progress)) + next_progress;
+                    _progress = ((ceil(progress * 5) / 5) * (30 - next_progress)) + next_progress;
                 });
 
                 auto temp = get_folder_path(special_folder::app_data);
@@ -317,13 +339,13 @@ namespace rs2
 
         if (dfu)
         {
-            _progress = next_progress;
+            _progress = float(next_progress);
 
             log("Recovery device connected, starting update");
 
             dfu.update(_fw, [&](const float progress)
             {
-                _progress = int((ceil(progress * 10) / 10 * (90 - next_progress)) + next_progress);
+                _progress = ((ceil(progress * 10) / 10 * (90 - next_progress)) + next_progress);
             });
 
             log("Firmware Download completed, await DFU transition event");
@@ -335,7 +357,7 @@ namespace rs2
             auto upd = _dev.as<updatable>();
             upd.update_unsigned(_fw, [&](const float progress)
             {
-                _progress = int((ceil(progress * 10) / 10 * (90 - next_progress)) + next_progress);
+                _progress = (ceil(progress * 10) / 10 * (90 - next_progress)) + next_progress;
             });
             log("Firmware Update completed, waiting for device to reconnect");
         }
@@ -449,12 +471,12 @@ namespace rs2
                                 {
                                     sm->stop(fw_update_manager->get_protected_notification_model());
                                 }
-                                catch (...) 
-                                { 
+                                catch (...)
+                                {
                                     // avoiding exception that can be sent by stop method
-                                    // this could happen if the sensor is not streaming and the stop method is called - for example 
+                                    // this could happen if the sensor is not streaming and the stop method is called - for example
                                 }
-                            }   
+                            }
                         });
 
                     auto _this = shared_from_this();
@@ -462,7 +484,7 @@ namespace rs2
                         _this->invoke(action);
                     };
 
-                    if (!update_manager->started()) 
+                    if (!update_manager->started())
                         update_manager->start(invoke);
 
                     update_state = RS2_FWU_STATE_IN_PROGRESS;
