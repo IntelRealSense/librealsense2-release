@@ -1,14 +1,6 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2021 Intel Corporation. All Rights Reserved.
 
-#include <easylogging++.h>
-#ifdef BUILD_SHARED_LIBS
-// With static linkage, ELPP is initialized by librealsense, so doing it here will
-// create errors. When we're using the shared .so/.dll, the two are separate and we have
-// to initialize ours if we want to use the APIs!
-INITIALIZE_EASYLOGGINGPP
-#endif
-
 #include <unit-tests/catch.h>
 #include <common/utilities/time/waiting-on.h>
 #include <queue>
@@ -18,12 +10,13 @@ using utilities::time::waiting_on;
 bool invoke( size_t delay_in_thread, size_t timeout )
 {
     waiting_on< bool > invoked( false );
-
-    auto lambda = [delay_in_thread, invoked = invoked.in_thread()]() {
-        //std::cout << "In thread" << std::endl;
-        std::this_thread::sleep_for( std::chrono::seconds( delay_in_thread ));
-        //std::cout << "Signalling" << std::endl;
-        invoked.signal( true );
+    
+    auto invoked_in_thread = invoked.in_thread();
+    auto lambda = [delay_in_thread, invoked_in_thread]() {
+        // std::cout << "In thread" << std::endl;
+        std::this_thread::sleep_for( std::chrono::seconds( delay_in_thread ) );
+        // std::cout << "Signalling" << std::endl;
+        invoked_in_thread.signal( true );
     };
     //std::cout << "Starting thread" << std::endl;
     std::thread( lambda ).detach();
@@ -55,9 +48,10 @@ TEST_CASE( "Struct usage" )
     waiting_on< value_t > output;
     output->d = 2.;
 
-    std::thread( [output_ = output.in_thread()]() {
+    auto output_ = output.in_thread();
+    std::thread( [output_]() {
         auto p_output = output_.still_alive();
-        auto& output = *p_output;
+        auto & output = *p_output;
         while( output->i < 30 )
         {
             std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
@@ -100,9 +94,7 @@ TEST_CASE( "Not invoked but still notified" )
     
     // Add something we'll be waiting on
     utilities::time::waiting_on< bool > invoked( false );
-    dispatcher->push( [invoked_in_thread = invoked.in_thread()]() {
-        invoked_in_thread.signal( true );
-    } );
+    dispatcher->push( [invoked_in_thread = invoked.in_thread()]() { invoked_in_thread.signal( true ); } );
 
     // Destroy the dispatcher while we're waiting on the invocation!
     std::atomic_bool stopped( false );

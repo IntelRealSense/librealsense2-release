@@ -4923,69 +4923,69 @@ TEST_CASE("Syncer clean_inactive_streams by frame number with software-device de
 }
 
 TEST_CASE("Unit transform test", "[live][software-device]") {
-	rs2::context ctx;
+    rs2::context ctx;
 
-	if (!make_context(SECTION_FROM_TEST_NAME, &ctx))
-		return;
+    if (!make_context(SECTION_FROM_TEST_NAME, &ctx))
+        return;
 
-	log_to_file(RS2_LOG_SEVERITY_DEBUG);
-	const int W = 640;
-	const int H = 480;
-	const int BPP = 2;
-	int expected_frames = 1;
-	int fps = 60;
-	float depth_unit = 1.5;
-	units_transform ut;
-	rs2_intrinsics intrinsics{ W, H, 0, 0, 0, 0, RS2_DISTORTION_NONE ,{ 0,0,0,0,0 } };
+    log_to_file(RS2_LOG_SEVERITY_DEBUG);
+    const int W = 640;
+    const int H = 480;
+    const int BPP = 2;
+    int expected_frames = 1;
+    int fps = 60;
+    float depth_unit = 1.5;
+    units_transform ut;
+    rs2_intrinsics intrinsics{ W, H, 0, 0, 0, 0, RS2_DISTORTION_NONE ,{ 0,0,0,0,0 } };
 
-	std::shared_ptr<software_device> dev = std::make_shared<software_device>();
-	auto s = dev->add_sensor("software_sensor");
-	s.add_read_only_option(RS2_OPTION_DEPTH_UNITS, depth_unit);
-	s.add_video_stream({ RS2_STREAM_DEPTH, 0, 0, W, H, fps, BPP, RS2_FORMAT_Z16, intrinsics });
+    std::shared_ptr<software_device> dev = std::make_shared<software_device>();
+    auto s = dev->add_sensor("software_sensor");
+    s.add_read_only_option(RS2_OPTION_DEPTH_UNITS, depth_unit);
+    s.add_video_stream({ RS2_STREAM_DEPTH, 0, 0, W, H, fps, BPP, RS2_FORMAT_Z16, intrinsics });
 
-	auto profiles = s.get_stream_profiles();
-	auto depth = profiles[0];
+    auto profiles = s.get_stream_profiles();
+    auto depth = profiles[0];
 
-	syncer sync;
-	s.open(profiles);
-	s.start(sync);
+    syncer sync;
+    s.open(profiles);
+    s.start(sync);
 
-	std::vector<uint16_t> pixels(W * H, 0);
-	for (int i = 0; i < W * H; i++) {
-		pixels[i] = i % 10;
-	}
+    std::vector<uint16_t> pixels(W * H, 0);
+    for (int i = 0; i < W * H; i++) {
+        pixels[i] = i % 10;
+    }
 
-	std::weak_ptr<rs2::software_device> weak_dev(dev);
-	std::thread t([s, weak_dev, &pixels, depth, expected_frames]() mutable {
-		auto shared_dev = weak_dev.lock();
-		if (shared_dev == nullptr)
-			return;
-		for (int i = 1; i <= expected_frames; i++)
-			s.on_video_frame({ pixels.data(), [](void*) {}, 0,0,rs2_time_t(i * 100), RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK, i, depth });
-	});
-	t.detach();
+    std::weak_ptr<rs2::software_device> weak_dev(dev);
+    std::thread t([s, weak_dev, &pixels, depth, expected_frames]() mutable {
+        auto shared_dev = weak_dev.lock();
+        if (shared_dev == nullptr)
+            return;
+        for (int i = 1; i <= expected_frames; i++)
+            s.on_video_frame({ pixels.data(), [](void*) {}, 0,0,rs2_time_t(i * 100), RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK, i, depth });
+    });
+    t.detach();
 
-	for (auto i = 0; i < expected_frames; i++)
-	{
-		frame f;
-		REQUIRE_NOTHROW(f = sync.wait_for_frames(5000));
+    for (auto i = 0; i < expected_frames; i++)
+    {
+        frame f;
+        REQUIRE_NOTHROW(f = sync.wait_for_frames(5000));
 
-		auto f_format = f.get_profile().format();
-		REQUIRE(RS2_FORMAT_Z16 == f_format);
+        auto f_format = f.get_profile().format();
+        REQUIRE(RS2_FORMAT_Z16 == f_format);
 
-		auto depth_distance = ut.process(f);
-		auto depth_distance_format = depth_distance.get_profile().format();
-		REQUIRE(RS2_FORMAT_DISTANCE == depth_distance_format);
+        auto depth_distance = ut.process(f);
+        auto depth_distance_format = depth_distance.get_profile().format();
+        REQUIRE(RS2_FORMAT_DISTANCE == depth_distance_format);
 
-		auto frame_data = reinterpret_cast<const uint16_t*>(f.get_data());
-		auto depth_distance_data = reinterpret_cast<const float*>(depth_distance.get_data());
+        auto frame_data = reinterpret_cast<const uint16_t*>(f.get_data());
+        auto depth_distance_data = reinterpret_cast<const float*>(depth_distance.get_data());
 
-		for (size_t i = 0; i < W*H; i++)
-		{
-			auto frame_data_units_transformed = (frame_data[i] * depth_unit);
-			REQUIRE(depth_distance_data[i] == frame_data_units_transformed);
-		}
-	}
+        for (size_t i = 0; i < W*H; i++)
+        {
+            auto frame_data_units_transformed = (frame_data[i] * depth_unit);
+            REQUIRE(depth_distance_data[i] == frame_data_units_transformed);
+        }
+    }
 }
 
 #define ADD_ENUM_TEST_CASE(rs2_enum_type, RS2_ENUM_COUNT)                                  \
@@ -5224,7 +5224,7 @@ TEST_CASE("Projection from recording", "[software-device][using_pipeline][projec
                 &depth_intrin, &color_intrin,
                 &color_extrin_to_depth, &depth_extrin_to_color, from_pixel);
 
-            float dist = sqrt(pow((depth_pixel[1] - to_pixel[1]), 2) + pow((depth_pixel[0] - to_pixel[0]), 2));
+            float dist = static_cast<float>(sqrt(pow((depth_pixel[1] - to_pixel[1]), 2) + pow((depth_pixel[0] - to_pixel[0]), 2)));
             if (dist > 1)
                 count++;
             if (dist > 2)
@@ -5238,6 +5238,12 @@ TEST_CASE("Projection from recording", "[software-device][using_pipeline][projec
     const double MAX_ERROR_PERCENTAGE = 0.1;
     CAPTURE(count);
     REQUIRE(count * 100 / (depth_intrin.width * depth_intrin.height) < MAX_ERROR_PERCENTAGE);
+
+    for (auto s : sensors)
+    {
+        s.stop();
+        s.close();
+    }
 }
 
 TEST_CASE("software-device pose stream", "[software-device]")
@@ -5304,44 +5310,53 @@ TEST_CASE("Record software-device", "[software-device][record][!mayfail]")
     std::string folder_name = get_folder_path(special_folder::temp_folder);
     const std::string filename = folder_name + "recording.bag";
 
-    //Software device, streams and frames definition
-    rs2::software_device dev;
-
-    auto sensor = dev.add_sensor("Synthetic");
-    rs2_intrinsics depth_intrinsics = { W, H, (float)W / 2, H / 2, (float)W, (float)H,
-        RS2_DISTORTION_BROWN_CONRADY ,{ 0,0,0,0,0 } };
-    rs2_video_stream video_stream = { RS2_STREAM_DEPTH, 0, 0, W, H, 60, BPP, RS2_FORMAT_Z16, depth_intrinsics };
-    auto depth_stream_profile = sensor.add_video_stream(video_stream);
-
-    rs2_motion_device_intrinsic motion_intrinsics = { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },{ 2, 2, 2 },{ 3, 3 ,3 } };
-    rs2_motion_stream motion_stream = { RS2_STREAM_ACCEL, 0, 1, 200, RS2_FORMAT_MOTION_RAW, motion_intrinsics };
-    auto motion_stream_profile = sensor.add_motion_stream(motion_stream);
-
-    rs2_pose_stream pose_stream = { RS2_STREAM_POSE, 0, 2, 200, RS2_FORMAT_6DOF };
-    auto pose_stream_profile = sensor.add_pose_stream(pose_stream);
-
-    rs2::syncer sync;
-    std::vector<stream_profile> stream_profiles;
-    stream_profiles.push_back(depth_stream_profile);
-    stream_profiles.push_back(motion_stream_profile);
-    stream_profiles.push_back(pose_stream_profile);
+    rs2_software_video_frame video_frame;
+    rs2_software_motion_frame motion_frame;
+    rs2_software_pose_frame pose_frame;
 
     std::vector<uint8_t> pixels(W * H * BPP, 100);
-    rs2_software_video_frame video_frame = { pixels.data(), [](void*) {},W*BPP, BPP, 10000, RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK, 0, depth_stream_profile };
     float motion_data[3] = { 1, 1, 1 };
-    rs2_software_motion_frame motion_frame = { motion_data, [](void*) {}, 20000, RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK, 0, motion_stream_profile };
     rs2_software_pose_frame::pose_frame_info pose_info = { { 1, 1, 1 },{ 2, 2, 2 },{ 3, 3, 3 },{ 4, 4 ,4 ,4 },{ 5, 5, 5 },{ 6, 6 ,6 }, 0, 0 };
-    rs2_software_pose_frame pose_frame = { &pose_info, [](void*) {}, 30000, RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK , 0, pose_stream_profile };
-
-    //Record software device
+    //Software device, streams and frames definition
     {
-        recorder recorder(filename, dev);
-        sensor.open(stream_profiles);
-        sensor.start(sync);
-        sensor.on_video_frame(video_frame);
-        sensor.on_motion_frame(motion_frame);
-        sensor.on_pose_frame(pose_frame);
+        rs2::software_device dev;
+
+        auto sensor = dev.add_sensor("Synthetic");
+        rs2_intrinsics depth_intrinsics = { W, H, (float)W / 2, H / 2, (float)W, (float)H,
+            RS2_DISTORTION_BROWN_CONRADY ,{ 0,0,0,0,0 } };
+        rs2_video_stream video_stream = { RS2_STREAM_DEPTH, 0, 0, W, H, 60, BPP, RS2_FORMAT_Z16, depth_intrinsics };
+        auto depth_stream_profile = sensor.add_video_stream(video_stream);
+
+        rs2_motion_device_intrinsic motion_intrinsics = { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },{ 2, 2, 2 },{ 3, 3 ,3 } };
+        rs2_motion_stream motion_stream = { RS2_STREAM_ACCEL, 0, 1, 200, RS2_FORMAT_MOTION_RAW, motion_intrinsics };
+        auto motion_stream_profile = sensor.add_motion_stream(motion_stream);
+
+        rs2_pose_stream pose_stream = { RS2_STREAM_POSE, 0, 2, 200, RS2_FORMAT_6DOF };
+        auto pose_stream_profile = sensor.add_pose_stream(pose_stream);
+
+        rs2::syncer sync;
+        std::vector<stream_profile> stream_profiles;
+        stream_profiles.push_back(depth_stream_profile);
+        stream_profiles.push_back(motion_stream_profile);
+        stream_profiles.push_back(pose_stream_profile);
+
+        video_frame = { pixels.data(), [](void*) {},W * BPP, BPP, 10000, RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK, 0, depth_stream_profile };
+        motion_frame = { motion_data, [](void*) {}, 20000, RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK, 0, motion_stream_profile };
+        pose_frame = { &pose_info, [](void*) {}, 30000, RS2_TIMESTAMP_DOMAIN_HARDWARE_CLOCK , 0, pose_stream_profile };
+
+        //Record software device
+        {
+            recorder recorder(filename, dev);
+            sensor.open(stream_profiles);
+            sensor.start(sync);
+            sensor.on_video_frame(video_frame);
+            sensor.on_motion_frame(motion_frame);
+            sensor.on_pose_frame(pose_frame);
+            sensor.stop();
+            sensor.close();
+        }
     }
+
 
     //Playback software device
     rs2::context ctx;
@@ -5385,6 +5400,9 @@ TEST_CASE("Record software-device", "[software-device][record][!mayfail]")
         pose_frame.frame_number == recorded_pose.get_frame_number() &&
         pose_frame.domain == recorded_pose.get_frame_timestamp_domain() &&
         pose_frame.timestamp == recorded_pose.get_timestamp()));
+
+    s.stop();
+    s.close();
 }
 
 void compare(filter first, filter second)
