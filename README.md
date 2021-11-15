@@ -1,3 +1,26 @@
+## librealsense2 (galactic) - 2.50.0-1
+
+The packages in the `librealsense2` repository were released into the `galactic` distro by running `/usr/bin/bloom-release --ros-distro galactic --track galactic librealsense2 --edit` on `Mon, 15 Nov 2021 07:47:16 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: https://github.com/IntelRealSense/librealsense2-release.git
+- rosdistro version: `2.48.0-2`
+- old version: `2.48.0-2`
+- new version: `2.50.0-1`
+
+Versions of tools used:
+
+- bloom version: `0.10.7`
+- catkin_pkg version: `0.4.23`
+- rosdep version: `0.20.0`
+- rosdistro version: `0.8.3`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (foxy) - 2.50.0-1
 
 The packages in the `librealsense2` repository were released into the `foxy` distro by running `/usr/bin/bloom-release --ros-distro foxy --track foxy librealsense2 --edit` on `Mon, 15 Nov 2021 07:42:23 -0000`
