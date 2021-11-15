@@ -79,7 +79,7 @@ tracks:
     ros_distro: foxy
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.48.0
+    version: 2.50.0
   galactic:
     actions:
     - bloom-export-upstream :{vcs_local_uri} :{vcs_type} --tag :{release_tag} --display-uri
