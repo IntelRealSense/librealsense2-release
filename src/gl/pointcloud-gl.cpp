@@ -1,12 +1,11 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2017 Intel Corporation. All Rights Reserved.
 
-#include "../include/librealsense2/rs.hpp"
-#include "../include/librealsense2/rsutil.h"
+#include <librealsense2/rs.hpp>
 
 #include "synthetic-stream-gl.h"
 #include "environment.h"
-#include "proc/occlusion-filter.h"
+#include "../proc/occlusion-filter.h"
 #include "pointcloud-gl.h"
 #include "option.h"
 #include "environment.h"
@@ -16,6 +15,7 @@
 #include <chrono>
 
 #include "opengl3.h"
+#include <glad/glad.h>
 
 using namespace rs2;
 using namespace librealsense;
@@ -409,12 +409,11 @@ pointcloud_gl::pointcloud_gl()
 const librealsense::float3* pointcloud_gl::depth_to_points(
         rs2::points output,
         const rs2_intrinsics &depth_intrinsics, 
-        const rs2::depth_frame& depth_frame,
-        float depth_scale)
+        const rs2::depth_frame& depth_frame)
 {
     perform_gl_action([&]{
         _depth_data = depth_frame;
-        _depth_scale = depth_scale;
+        _depth_scale = depth_frame.get_units();
         _depth_intr = depth_intrinsics;
     }, [&]{
         _enabled = false;

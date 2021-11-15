@@ -94,7 +94,6 @@ namespace librealsense
         auto asic_serial = _hw_monitor->get_module_serial_string(gvd_buff, module_asic_serial_offset, module_asic_serial_size);
         auto fwv = _hw_monitor->get_firmware_version_string(gvd_buff, fw_version_offset);
         _fw_version = firmware_version(fwv);
-        firmware_version recommended_fw_version(L5XX_RECOMMENDED_FIRMWARE_VERSION);
 
         _is_locked = _hw_monitor->get_gvd_field<uint8_t>(gvd_buff, is_camera_locked_offset) != 0;
 
@@ -114,7 +113,6 @@ namespace librealsense
         register_info(RS2_CAMERA_INFO_ASIC_SERIAL_NUMBER, asic_serial);
         register_info(RS2_CAMERA_INFO_FIRMWARE_UPDATE_ID, asic_serial);
         register_info(RS2_CAMERA_INFO_FIRMWARE_VERSION, _fw_version);
-        register_info(RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION, recommended_fw_version);
         register_info(RS2_CAMERA_INFO_DEBUG_OP_CODE, std::to_string(static_cast<int>(fw_cmd::GLD)));
         register_info(RS2_CAMERA_INFO_PHYSICAL_PORT, group.uvc_devices.front().device_path);
         register_info(RS2_CAMERA_INFO_PRODUCT_ID, pid_hex_str);
@@ -354,7 +352,7 @@ namespace librealsense
             _hw_monitor->send( cmd );
 
             // We allow 6 seconds because on Linux the removal status is updated at a 5 seconds rate.
-            const int MAX_ITERATIONS_FOR_DEVICE_DISCONNECTED_LOOP = (POLLING_DEVICES_INTERVAL_MS + 1000) / DELAY_FOR_RETRIES;
+            const int MAX_ITERATIONS_FOR_DEVICE_DISCONNECTED_LOOP = DISCONNECT_PERIOD_MS / DELAY_FOR_RETRIES;
             for( auto i = 0; i < MAX_ITERATIONS_FOR_DEVICE_DISCONNECTED_LOOP; i++ )
             {
                 // If the device was detected as removed we assume the device is entering update mode
@@ -694,15 +692,19 @@ namespace librealsense
 
     bool l500_device::check_fw_compatibility(const std::vector<uint8_t>& image) const
     {
-        std::string fw_version = extract_firmware_version_string((const void*)image.data(), image.size());
+        std::string fw_version = extract_firmware_version_string(image);
 
         auto min_max_fw_it = ivcam2::device_to_fw_min_max_version.find(_pid);
         if (min_max_fw_it == ivcam2::device_to_fw_min_max_version.end())
-            throw std::runtime_error("Min and Max firmware versions have not been defined for this device!");
+            throw librealsense::invalid_value_exception(to_string() << "Min and Max firmware versions have not been defined for this device: " << std::hex << _pid);
 
         // Limit L515 to FW versions within the 1.5.1.3-1.99.99.99 range to differenciate from the other products
-        return (firmware_version(fw_version) >= firmware_version(min_max_fw_it->second.first)) &&
-               (firmware_version(fw_version) <= firmware_version(min_max_fw_it->second.second));
+        bool result = (firmware_version(fw_version) >= firmware_version(min_max_fw_it->second.first)) &&
+            (firmware_version(fw_version) <= firmware_version(min_max_fw_it->second.second));
+        if (!result)
+            LOG_ERROR("Firmware version isn't compatible" << fw_version);
+
+        return result;
 
     }
 
