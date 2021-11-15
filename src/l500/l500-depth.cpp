@@ -435,7 +435,7 @@ namespace librealsense
 
                 try {
                     // Keep the USB power on while triggering multiple calls on it.
-                    ivcam2::group_multiple_fw_calls(*this, [&]() {
+                    group_multiple_fw_calls(*this, [&]() {
                         // endpoint 2 (depth)
                         command cmdTprocGranEp2(ivcam2::TPROC_USB_GRAN_SET, 2, ep2_usb_trb);
                         _owner->_hw_monitor->send(cmdTprocGranEp2);
@@ -504,6 +504,9 @@ namespace librealsense
     {
         try
         {
+            auto depth_units = get_option(RS2_OPTION_DEPTH_UNITS).query();
+            set_frame_metadata_modifier([&, depth_units](frame_additional_data& data) {data.depth_units = depth_units; });
+
             _user_requests = requests;
 
             auto is_ir_requested

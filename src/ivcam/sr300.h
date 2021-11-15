@@ -38,10 +38,10 @@ namespace librealsense
 
     static std::map<uint16_t, std::pair<std::string, std::string>> device_to_fw_min_max_version = {
             { SR300_PID,        {"3.21.0.0", "3.26.3.0"}},
-            { SR300v2_PID,      {"3.27.0.0", "99.99.99.99"}},
-            { SR306_PID,        {"3.28.3.0", "99.99.99.99"}},
-            { SR306_PID_DBG,    {"3.28.3.0", "99.99.99.99"}},
-            { SR300_RECOVERY,   {"3.21.0.0", "99.99.99.99"}}
+            { SR300v2_PID,      {"3.27.0.0", "3.99.99.99"}},
+            { SR306_PID,        {"3.28.3.0", "3.99.99.99"}},
+            { SR306_PID_DBG,    {"3.28.3.0", "3.99.99.99"}},
+            { SR300_RECOVERY,   {"3.21.0.0", "3.99.99.99"}}
     };
 
     class sr300_timestamp_reader : public frame_timestamp_reader
@@ -261,6 +261,10 @@ namespace librealsense
                 const std::map<uint32_t, rs2_stream>& sr300_depth_fourcc_to_rs2_stream)
                 : synthetic_sensor("Coded-Light Depth Sensor", uvc_sensor, owner, sr300_depth_fourcc_to_rs2_format, sr300_depth_fourcc_to_rs2_stream), _owner(owner)
             {}
+
+            void open(const stream_profiles& requests) override;
+
+            void set_frame_metadata_modifier(on_frame_md callback) override;
 
             rs2_intrinsics get_intrinsics(const stream_profile& profile) const override
             {
