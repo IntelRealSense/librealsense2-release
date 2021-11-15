@@ -81,7 +81,7 @@ inline ImVec4 blend(const ImVec4& c, float a)
 namespace rs2
 {
     constexpr const char* server_versions_db_url = "https://librealsense.intel.com/Releases/rs_versions_db.json";
-    
+
     void prepare_config_file();
 
     bool frame_metadata_to_csv( const std::string & filename, rs2::frame frame );
@@ -97,7 +97,7 @@ namespace rs2
     typedef std::vector<std::unique_ptr<device_model>> device_models_list;
 
     void open_issue(const device_models_list& devices);
-    
+
     void hyperlink(ux_window& window, const char* title, const char* link);
 
     struct textual_icon
@@ -314,13 +314,19 @@ namespace rs2
         void update_supported(std::string& error_message);
         void update_read_only_status(std::string& error_message);
         void update_all_fields(std::string& error_message, notifications_model& model);
-        void set_option(rs2_option opt, float value, std::string &error_message);
+        bool set_option( rs2_option opt,
+                         float value,
+                         std::string & error_message,
+                         std::chrono::steady_clock::duration ignore_period = std::chrono::seconds( 0 ) );
         bool draw_option(bool update_read_only_options, bool is_streaming,
             std::string& error_message, notifications_model& model);
 
         rs2_option opt;
         option_range range;
         std::shared_ptr<options> endpoint;
+        float unset_value = 0;
+        bool have_unset_value = false;
+        utilities::time::stopwatch last_set_stopwatch;
         bool* invalidate_flag = nullptr;
         bool supported = false;
         bool read_only = false;
@@ -335,7 +341,16 @@ namespace rs2
         bool is_all_integers() const;
         bool is_enum() const;
         bool is_checkbox() const;
-        bool allow_change(float val, std::string& error_message) const; 
+        bool allow_change(float val, std::string& error_message) const;
+        bool slider_selected( rs2_option opt,
+            float value,
+            std::string& error_message,
+            notifications_model& model);
+
+        bool slider_unselected(rs2_option opt,
+            float value,
+            std::string& error_message,
+            notifications_model& model);
     };
 
     class frame_queues
@@ -372,7 +387,7 @@ namespace rs2
     class viewer_model;
     class subdevice_model;
 
-    void save_processing_block_to_config_file(const char* name, 
+    void save_processing_block_to_config_file(const char* name,
         std::shared_ptr<rs2::processing_block> pb, bool enable = true);
 
     class syncer_model
@@ -518,7 +533,7 @@ namespace rs2
     {
     public:
         tm2_model() : _trajectory_tracking(true)
-        {   
+        {
         }
         void draw_trajectory(bool is_trajectory_button_pressed);
         void update_model_trajectory(const pose_frame& pose, bool track);
@@ -588,7 +603,7 @@ namespace rs2
         bool supports_on_chip_calib();
         bool draw_stream_selection(std::string& error_message);
         bool is_selected_combination_supported();
-        std::vector<stream_profile> get_selected_profiles();
+        std::vector<stream_profile> get_selected_profiles(bool enforce_inter_stream_policies = true);
         std::vector<stream_profile> get_supported_profiles();
         void stop(std::shared_ptr<notifications_model> not_model);
         void play(const std::vector<stream_profile>& profiles, viewer_model& viewer, std::shared_ptr<rs2::asynchronous_syncer>);
@@ -692,6 +707,7 @@ namespace rs2
 
         bool draw_streams_selector = true;
         bool draw_fps_selector = true;
+        bool draw_advanced_mode_prompt = false;
 
         region_of_interest algo_roi;
         bool show_algo_roi = false;
@@ -699,6 +715,7 @@ namespace rs2
 
         std::shared_ptr<rs2::colorizer> depth_colorizer;
         std::shared_ptr<rs2::yuy_decoder> yuy2rgb;
+        std::shared_ptr<rs2::y411_decoder> y411;
         std::shared_ptr<processing_block_model> zero_order_artifact_fix;
         std::shared_ptr<rs2::depth_huffman_decoder> depth_decoder;
 
@@ -706,7 +723,16 @@ namespace rs2
         bool post_processing_enabled = true;
         std::vector<std::shared_ptr<processing_block_model>> const_effects;
 
+        bool uvmapping_calib_full = false;
+
     private:
+        std::pair<int, int> get_max_resolution(rs2_stream stream) const;
+        void sort_resolutions(std::vector<std::pair<int, int>>& resolutions) const;
+        bool is_ir_calibration_profile() const;
+        
+        // used in method get_max_resolution per stream
+        std::map<rs2_stream, std::vector<std::pair<int, int>>> resolutions_per_stream;
+
         const float SHORT_RANGE_MIN_DISTANCE = 0.05f; // 5 cm
         const float SHORT_RANGE_MAX_DISTANCE = 4.0f;  // 4 meters
     };
@@ -730,7 +756,7 @@ namespace rs2
         void show_stream_footer(ImFont* font, const rect &stream_rect, const mouse_info& mouse, const std::map<int, stream_model> &streams, viewer_model& viewer);
         void show_stream_header(ImFont* font, const rect& stream_rect, viewer_model& viewer);
         void show_stream_imu(ImFont* font, const rect& stream_rect, const rs2_vector& axis, const mouse_info& mouse);
-        void show_stream_pose(ImFont* font, const rect& stream_rect, const rs2_pose& pose_data, 
+        void show_stream_pose(ImFont* font, const rect& stream_rect, const rs2_pose& pose_data,
             rs2_stream stream_type, bool fullScreen, float y_offset, viewer_model& viewer);
 
         void snapshot_frame(const char* filename,viewer_model& viewer) const;
@@ -774,7 +800,7 @@ namespace rs2
         int _prev_mouse_pos_y = 0;
 
     private:
-        std::unique_ptr< reflectivity > _reflectivity; 
+        std::unique_ptr< reflectivity > _reflectivity;
         utilities::number::stabilized_value<float> _stabilized_reflectivity;
 
     };
@@ -795,7 +821,7 @@ namespace rs2
         void stop_recording(viewer_model& viewer);
         void pause_record();
         void resume_record();
-        
+
         void refresh_notifications(viewer_model& viewer);
         bool check_for_bundled_fw_update( const rs2::context & ctx,
                                           std::shared_ptr< notifications_model > not_model,
@@ -848,7 +874,7 @@ namespace rs2
     private:
         // This class is in charge of camera accuracy health window parameters,
         // Needed as a member for reseting the window memory on device disconnection.
-       
+
 
         void draw_info_icon(ux_window& window, ImFont* font, const ImVec2& size);
         int draw_seek_bar();

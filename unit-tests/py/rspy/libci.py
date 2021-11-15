@@ -1,7 +1,7 @@
 # License: Apache 2.0. See LICENSE file in root directory.
 # Copyright(c) 2021 Intel Corporation. All Rights Reserved.
 
-import re, os, subprocess, time, sys
+import re, os, subprocess, time, sys, platform
 from abc import ABC, abstractmethod
 
 from rspy import log, file
@@ -16,7 +16,10 @@ logdir = None
 # This is always a directory called "LibCI", but may be in different locations, in this order of priority:
 #     1. C:\LibCI  (on the LibCI machine)
 #     2. ~/LibCI   (in Windows, ~ is likely C:\Users\<username>)
-home = 'C:\\LibCI'
+if platform.system() == 'Linux':
+    home = '/usr/local/lib/ci'
+else:
+    home = 'C:\\LibCI'
 if not os.path.isdir( home ):
     home = os.path.normpath( os.path.expanduser( '~/LibCI' ))
 #
@@ -48,7 +51,7 @@ def run( cmd, stdout = None, timeout = 200, append = False ):
             if append:
                 handle = open( stdout, "a" )
                 handle.write(
-                    "\n---------------------------------------------------------------------------------\n\n" )
+                    "\n----------TEST-SEPARATOR----------\n\n" )
                 handle.flush()
             else:
                 handle = open( stdout, "w" )
@@ -251,7 +254,7 @@ class Test( ABC ):  # Abstract Base Class
         self._ran = False
 
     @abstractmethod
-    def run_test( self, configuration = None, log_path = None ):
+    def run_test( self, configuration = None, log_path = None, opts = set() ):
         pass
 
     def debug_dump( self ):
@@ -354,26 +357,40 @@ class PyTest( Test ):
     @property
     def command( self ):
         cmd = [sys.executable]
-        # The unit-tests should only find module we've specifically added -- but Python may have site packages
-        # that are automatically made available. We want to avoid those:
-        #     -S     : don't imply 'import site' on initialization
-        # NOTE: exit() is defined in site.py and works only if the site module is imported!
-        cmd += ['-S']
+        #
+        # PYTHON FLAGS
+        #
+        #     -u     : force the stdout and stderr streams to be unbuffered; same as PYTHONUNBUFFERED=1
+        # With buffering we may end up losing output in case of crashes! (in Python 3.7 the text layer of the
+        # streams is unbuffered, but we assume 3.6)
+        cmd += ['-u']
+        #
         if sys.flags.verbose:
             cmd += ["-v"]
+        #
         cmd += [self.path_to_script]
+        #
+        # SCRIPT FLAGS
+        #
+        # If the script has a custom-arguments flag, then we don't pass any of the standard options
         if 'custom-args' not in self.config.flags:
+            #
             if log.is_debug_on():
                 cmd += ['--debug']
+            #
             if log.is_color_on():
                 cmd += ['--color']
+            #
             if self.config.context:
                 cmd += ['--context', self.config.context]
         return cmd
 
-    def run_test( self, configuration = None, log_path = None ):
+    def run_test( self, configuration = None, log_path = None, opts = set() ):
         try:
-            run( self.command, stdout=log_path, append=self.ran, timeout=self.config.timeout )
+            cmd = self.command
+            if opts:
+                cmd += [opt for opt in opts]
+            run( cmd, stdout=log_path, append=self.ran, timeout=self.config.timeout )
         finally:
             self._ran = True
 
@@ -411,16 +428,20 @@ class ExeTest( Test ):
             if log.is_debug_on():
                 cmd += ['-d', 'yes']  # show durations for each test-case
                 # cmd += ['--success']  # show successful assertions in output
+                cmd += ['--debug']
             # if log.is_color_on():
             #    cmd += ['--use-colour', 'yes']
             if self.config.context:
                 cmd += ['--context', self.config.context]
         return cmd
 
-    def run_test( self, configuration = None, log_path = None ):
+    def run_test( self, configuration = None, log_path = None, opts = set() ):
         if not self.exe:
             raise RuntimeError("Tried to run test " + self.name + " with no exe file provided")
         try:
-            run( self.command, stdout=log_path, append=self.ran, timeout=self.config.timeout )
+            cmd = self.command
+            if opts:
+                cmd += [opt for opt in opts]
+            run( cmd, stdout=log_path, append=self.ran, timeout=self.config.timeout )
         finally:
             self._ran = True
