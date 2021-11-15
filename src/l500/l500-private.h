@@ -248,9 +248,9 @@ namespace librealsense
         };
 
         static const std::map<std::uint16_t, std::string> rs500_sku_names = {
-            { L500_RECOVERY_PID,            "Intel RealSense L5xx Recovery"},
-            { L535_RECOVERY_PID,            "Intel RealSense L5xx Recovery"},
-            { L500_USB2_RECOVERY_PID_OLD,   "Intel RealSense L5xx Recovery"},
+            { L500_RECOVERY_PID,            "Intel RealSense L51X Recovery"},
+            { L535_RECOVERY_PID,            "Intel RealSense L53X Recovery"},
+            { L500_USB2_RECOVERY_PID_OLD,   "Intel RealSense L51X Recovery"},
             { L500_PID,                     "Intel RealSense L500"},
             { L515_PID_PRE_PRQ,             "Intel RealSense L515 (pre-PRQ)"},
             { L515_PID,                     "Intel RealSense L515"},
@@ -260,12 +260,12 @@ namespace librealsense
 
         static std::map<uint16_t, std::pair<std::string, std::string>> device_to_fw_min_max_version = {
             { L500_RECOVERY_PID,            { "1.5.1.3", "1.99.99.99"}},
-            { L535_RECOVERY_PID,            { "1.5.1.3", "1.99.99.99"}},
+            { L535_RECOVERY_PID,            { "3.5.5.1", "3.99.99.99"}},
             { L500_USB2_RECOVERY_PID_OLD,   { "1.5.1.3", "1.99.99.99"}},
             { L500_PID,                     { "1.5.1.3", "1.99.99.99"}},
             { L515_PID_PRE_PRQ,             { "1.5.1.3", "1.99.99.99"}},
             { L515_PID,                     { "1.5.1.3", "1.99.99.99"}},
-            { L535_PID,                     { "1.5.1.3", "1.99.99.99"}}
+            { L535_PID,                     { "3.5.5.1", "3.99.99.99"}}
         };
 
         // Known FW error codes, if we poll for errors (RS2_OPTION_ERROR_POLLING_ENABLED)
@@ -617,18 +617,6 @@ namespace librealsense
         };
 
         rs2_sensor_mode get_resolution_from_width_height(int width, int height);
-
-        // Helper function that should be used when multiple FW calls needs to be made.
-        // This function change the USB power to D0 (Operational) using the invoke_power function
-        // activate the received function and power down the state to D3 (Idle)
-        template<class T>
-        auto group_multiple_fw_calls(synthetic_sensor &s, T action)
-            -> decltype(action())
-        {
-            auto &us =  dynamic_cast<uvc_sensor&>(*s.get_raw_sensor());
-            
-            return us.invoke_powered([&](platform::uvc_device& dev) { return action(); });
-        }
 
         class ac_trigger;
     } // librealsense::ivcam2

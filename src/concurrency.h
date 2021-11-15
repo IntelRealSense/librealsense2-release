@@ -36,14 +36,14 @@ public:
 
     // Enqueue an item onto the queue.
     // If the queue grows beyond capacity, the front will be removed, losing whatever was there!
-    void enqueue(T&& item)
+    bool enqueue(T&& item)
     {
         std::unique_lock<std::mutex> lock(_mutex);
         if( ! _accepting )
         {
             if( _on_drop_callback )
                 _on_drop_callback( item );
-            return;
+            return false;
         }
 
         _queue.push_back(std::move(item));
@@ -59,6 +59,8 @@ public:
 
         // We pushed something -- let others know there's something to dequeue
         _deq_cv.notify_one();
+
+        return true;
     }
 
 
@@ -126,14 +128,23 @@ public:
         return true;
     }
 
-    bool peek(T** item)
+    template< class Fn >
+    bool peek( Fn fn ) const
     {
         std::lock_guard< std::mutex > lock( _mutex );
-
-        if (_queue.empty())
+        if( _queue.empty() )
             return false;
+        fn( _queue.front() );
+        return true;
+    }
 
-        *item = &_queue.front();
+    template< class Fn >
+    bool peek( Fn fn )
+    {
+        std::lock_guard< std::mutex > lock( _mutex );
+        if( _queue.empty() )
+            return false;
+        fn( _queue.front() );
         return true;
     }
 
@@ -182,20 +193,25 @@ public:
     bool empty() const { return ! size(); }
 };
 
+// A single_consumer_queue meant to hold frame_holder objects
 template<class T>
 class single_consumer_frame_queue
 {
     single_consumer_queue<T> _queue;
 
 public:
-    single_consumer_frame_queue<T>(unsigned int cap = QUEUE_MAX_SIZE) : _queue(cap) {}
-
-    void enqueue(T&& item)
+    single_consumer_frame_queue< T >( unsigned int cap = QUEUE_MAX_SIZE,
+                                      std::function< void( T const & ) > on_drop_callback = nullptr )
+        : _queue( cap, on_drop_callback )
     {
-        if (item.is_blocking())
-            _queue.blocking_enqueue(std::move(item));
+    }
+
+    bool enqueue( T && item )
+    {
+        if( item->is_blocking() )
+            return _queue.blocking_enqueue( std::move( item ) );
         else
-            _queue.enqueue(std::move(item));
+            return _queue.enqueue( std::move( item ) );
     }
 
     bool dequeue(T* item, unsigned int timeout_ms)
@@ -203,14 +219,21 @@ public:
         return _queue.dequeue(item, timeout_ms);
     }
 
-    bool peek(T** item)
-    {
-        return _queue.peek(item);
-    }
-
     bool try_dequeue(T* item)
     {
         return _queue.try_dequeue(item);
+    }
+
+    template< class Fn >
+    bool peek( Fn fn ) const
+    {
+        return _queue.peek( fn );
+    }
+
+    template< class Fn >
+    bool peek( Fn fn )
+    {
+        return _queue.peek( fn );
     }
 
     void clear()
@@ -262,6 +285,8 @@ public:
             : _owner(owner)
         {}
 
+        bool was_stopped() const { return _owner->_was_stopped.load(); }
+
         // Replacement for sleep() -- try to sleep for a time, but stop if the
         // dispatcher is stopped
         // 
@@ -273,13 +298,12 @@ public:
             using namespace std::chrono;
 
             std::unique_lock<std::mutex> lock(_owner->_was_stopped_mutex);
-            auto dispatcher_was_stopped = [&]() { return _owner->_was_stopped.load(); };
-            if( dispatcher_was_stopped() )
+            if( was_stopped() )
                 return false;
             // wait_for() returns "false if the predicate pred still evaluates to false after the
             // rel_time timeout expired, otherwise true"
             return ! (
-                _owner->_was_stopped_cv.wait_for( lock, sleep_time, dispatcher_was_stopped ) );
+                _owner->_was_stopped_cv.wait_for( lock, sleep_time, [&]() { return was_stopped(); } ) );
         }
     };
 
