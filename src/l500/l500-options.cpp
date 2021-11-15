@@ -4,6 +4,7 @@
 #include "l500-options.h"
 #include "l500-private.h"
 #include "l500-depth.h"
+#include "../common/fw/firmware-version.h"
 
 const std::string MIN_CONTROLS_FW_VERSION("1.3.9.0");
 const std::string MIN_GET_DEFAULT_FW_VERSION( "1.5.4.0" );
@@ -73,7 +74,7 @@ namespace librealsense
         , _was_set_manually( false )
     {
         // Keep the USB power on while triggering multiple calls on it.
-        ivcam2::group_multiple_fw_calls( _l500_dev->get_depth_sensor(), [&]() {
+        group_multiple_fw_calls( _l500_dev->get_depth_sensor(), [&]() {
             auto min = _hw_monitor->send( command{ AMCGET, _type, get_min } );
             auto max = _hw_monitor->send( command{ AMCGET, _type, get_max } );
             auto step = _hw_monitor->send( command{ AMCGET, _type, get_step } );
@@ -210,7 +211,7 @@ namespace librealsense
         auto& depth_sensor = get_depth_sensor();
 
         // Keep the USB power on while triggering multiple HW monitor commands on it.
-        ivcam2::group_multiple_fw_calls( depth_sensor, [&]() {
+        group_multiple_fw_calls( depth_sensor, [&]() {
             if (_fw_version >= firmware_version("1.5.0.0"))
             {
                 bool usb3mode = (_usb_mode >= platform::usb3_type || _usb_mode == platform::usb_undefined);
@@ -429,11 +430,14 @@ namespace librealsense
                     "ambient.",
                     this );
 
-                _preset->set_value( (float)preset );
+                _preset->set( (float)preset );
 
                 depth_sensor.register_option( RS2_OPTION_VISUAL_PRESET, _preset );
 
                 _advanced_options = get_advanced_controls();
+
+                firmware_version recommended_fw_version(L51X_RECOMMENDED_FIRMWARE_VERSION);
+                register_info(RS2_CAMERA_INFO_RECOMMENDED_FIRMWARE_VERSION, recommended_fw_version);
             }
         } );
     }
@@ -609,7 +613,7 @@ namespace librealsense
     void l500_options::change_preset( rs2_l500_visual_preset preset )
     {
         // Keep the USB power on while triggering multiple calls on it.
-        ivcam2::group_multiple_fw_calls( get_depth_sensor(), [&]() {
+        group_multiple_fw_calls( get_depth_sensor(), [&]() {
             // we need to reset the controls before change gain because after moving to auto gain
             // APD is read only. This will tell the FW that the control values are defaults and
             // therefore can be overridden automatically according to gain
@@ -667,7 +671,7 @@ namespace librealsense
     void l500_options::reset_hw_controls()
     {
         // Keep the USB power on while triggering multiple calls on it.
-        ivcam2::group_multiple_fw_calls( get_depth_sensor(), [&]() {
+        group_multiple_fw_calls( get_depth_sensor(), [&]() {
             for (auto& o : _hw_options)
                 if (!o.second->is_read_only())
                 {
@@ -687,7 +691,7 @@ namespace librealsense
     void l500_options::update_defaults()
     {
         // Keep the USB power on while triggering multiple calls on it.
-        ivcam2::group_multiple_fw_calls( get_depth_sensor(), [&]() {
+        group_multiple_fw_calls( get_depth_sensor(), [&]() {
 
             auto& resolution = get_depth_sensor().get_option(RS2_OPTION_SENSOR_MODE);
 
@@ -818,7 +822,7 @@ namespace librealsense
         float_option_with_description::set(value);
 
         // Keep the USB power on while triggering multiple calls on it.
-        ivcam2::group_multiple_fw_calls( ds, [&]() { notify( value ); } );
+        group_multiple_fw_calls( ds, [&]() { notify( value ); } );
     }
 
     const char * max_usable_range_option::get_description() const
