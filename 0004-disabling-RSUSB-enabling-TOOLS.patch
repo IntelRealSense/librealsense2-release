@@ -1,0 +1,34 @@
+From 3af891e7ce79af0715239dfd4486433ec45913b5 Mon Sep 17 00:00:00 2001
+From: Remi Bettan <remibettan@gmail.com>
+Date: Tue, 22 Feb 2022 04:56:43 -0800
+Subject: [PATCH 4/4] disabling RSUSB, enabling TOOLS
+
+---
+ CMake/lrs_options.cmake | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
+index bc69740..9d937fd 100644
+--- a/CMake/lrs_options.cmake
++++ b/CMake/lrs_options.cmake
+@@ -17,7 +17,7 @@ option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Impl
+ option(BUILD_CV_EXAMPLES "Build OpenCV examples" OFF)
+ option(BUILD_DLIB_EXAMPLES "Build DLIB examples - requires DLIB_DIR" OFF)
+ option(BUILD_PCL_EXAMPLES "Build PCL examples" OFF)
+-option(BUILD_TOOLS "Build tools (fw-updater, etc.) that are not examples" OFF)
++option(BUILD_TOOLS "Build tools (fw-updater, etc.) that are not examples" ON)
+ option(ENFORCE_METADATA "Require WinSDK with Metadata support during compilation. Windows OS Only" OFF)
+ option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
+ option(BUILD_PYTHON_DOCS "Build Documentation for Python bindings" OFF)
+@@ -30,7 +30,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
+ option(BUILD_OPENNI2_BINDINGS "Build OpenNI bindings" OFF)
+ option(IMPORT_DEPTH_CAM_FW "Download the latest firmware for the depth cameras" ON)
+ option(BUILD_CV_KINFU_EXAMPLE "Build OpenCV KinectFusion example" OFF)
+-option(FORCE_RSUSB_BACKEND "Use RS USB backend, mandatory for Win7/MacOS/Android, optional for Linux" ON)
++option(FORCE_RSUSB_BACKEND "Use RS USB backend, mandatory for Win7/MacOS/Android, optional for Linux" OFF)
+ option(BUILD_NETWORK_DEVICE "Build Network Device support" OFF)
+ option(FORCE_LIBUVC "Explicitly turn-on libuvc backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
+ option(FORCE_WINUSB_UVC "Explicitly turn-on winusb_uvc (for win7) backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
+-- 
+2.25.1
+

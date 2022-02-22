@@ -1,7 +1,7 @@
-From e19d26bf24abdb354675cd2181794f9091c4928b Mon Sep 17 00:00:00 2001
+From 0b7896b57bfc11b45a983643083b763a1ac2e1ee Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Mon, 5 Oct 2020 08:32:37 +0300
-Subject: [PATCH 2/3] package.xml: catkin->ament_cmake
+Subject: [PATCH 2/4] package.xml: catkin->ament_cmake
 
 ---
  package.xml | 4 ++--
