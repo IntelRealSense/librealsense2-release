@@ -1,4 +1,4 @@
-From b32c2fdf3cf7ad74e456e72dff37a261327c7b22 Mon Sep 17 00:00:00 2001
+From 8562b0db3e9456156e8146a834d7a23ac3461c00 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Mon, 5 Oct 2020 08:49:08 +0300
 Subject: [PATCH 3/3] package.xml: add maintainer:doronhi
@@ -8,7 +8,7 @@ Subject: [PATCH 3/3] package.xml: add maintainer:doronhi
  1 file changed, 1 insertion(+)
 
 diff --git a/package.xml b/package.xml
-index 956cf2a..6098b4e 100644
+index 7ca61a9..3dc691a 100644
 --- a/package.xml
 +++ b/package.xml
 @@ -13,6 +13,7 @@
@@ -20,5 +20,5 @@ index 956cf2a..6098b4e 100644
    <url type="website">https://github.com/IntelRealSense/librealsense/</url>
  
 -- 
-2.7.4
+2.25.1
 
