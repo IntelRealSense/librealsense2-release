@@ -13,7 +13,6 @@
   </description>
 
   <maintainer email="sergey.dorodnicov@intel.com">Sergey Dorodnicov</maintainer>
-  <maintainer email="doron.hirshberg@intel.com">Doron Hirshberg</maintainer>
 
   <url type="website">https://github.com/IntelRealSense/librealsense/</url>
 
@@ -25,7 +24,7 @@
 
   <license>Apache License, Version 2.0</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>catkin</buildtool_depend>
 
   <build_depend>pkg-config</build_depend>
 
@@ -36,6 +35,6 @@
   <build_depend>udev</build_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>cmake</build_type>
   </export>
 </package>
