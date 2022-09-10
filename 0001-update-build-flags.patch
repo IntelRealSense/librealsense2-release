@@ -1,4 +1,4 @@
-From fd1bd2425a6698f7ab441f9044c6ded0aa2b0927 Mon Sep 17 00:00:00 2001
+From 433c49e780587e87774df558c26552b15e85f3f4 Mon Sep 17 00:00:00 2001
 From: doronhi <doron_hirshberg@hotmail.com>
 Date: Mon, 5 Oct 2020 08:31:42 +0300
 Subject: [PATCH 1/4] update build flags
@@ -8,7 +8,7 @@ Subject: [PATCH 1/4] update build flags
  1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
-index 15350a8..bc69740 100644
+index 3e54a3b..c98d027 100644
 --- a/CMake/lrs_options.cmake
 +++ b/CMake/lrs_options.cmake
 @@ -1,4 +1,4 @@
@@ -17,7 +17,7 @@ index 15350a8..bc69740 100644
  option(BUILD_WITH_CUDA "Enable CUDA" OFF)
  option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
  option(BUILD_WITH_OPENMP "Use OpenMP" OFF)
-@@ -12,12 +12,12 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
+@@ -11,12 +11,12 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
  option(BUILD_UNIT_TESTS "Build LibCI unit tests. If enabled, additional test data may be downloaded" OFF)
  option(BUILD_LEGACY_LIVE_TEST "Build the live-test.exe test used in Travis. If enabled, additional test data may be downloaded" OFF)
  option(BUILD_INTERNAL_UNIT_TESTS "Test package for components under librealsense namespace, requires BUILD_SHARED_LIBS=OFF and BUILD_UNIT_TESTS=ON" OFF)
@@ -33,7 +33,7 @@ index 15350a8..bc69740 100644
  option(ENFORCE_METADATA "Require WinSDK with Metadata support during compilation. Windows OS Only" OFF)
  option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
  option(BUILD_PYTHON_DOCS "Build Documentation for Python bindings" OFF)
-@@ -30,7 +30,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
+@@ -29,7 +29,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
  option(BUILD_OPENNI2_BINDINGS "Build OpenNI bindings" OFF)
  option(IMPORT_DEPTH_CAM_FW "Download the latest firmware for the depth cameras" ON)
  option(BUILD_CV_KINFU_EXAMPLE "Build OpenCV KinectFusion example" OFF)

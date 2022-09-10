@@ -1,17 +1,17 @@
-From d09b72f449ffb96140b372b79575e631ec1b1406 Mon Sep 17 00:00:00 2001
+From 0573e6089db9ac48399fb17034ddba23ee770b56 Mon Sep 17 00:00:00 2001
 From: Remi Bettan <remibettan@gmail.com>
 Date: Tue, 22 Feb 2022 05:24:18 -0800
-Subject: [PATCH 4/4] disabling RSUSB, enabling TOOLS
+Subject: [PATCH 3/4] disabling RSUSB, enabling TOOLS
 
 ---
  CMake/lrs_options.cmake | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
-index bc69740..9d937fd 100644
+index c98d027..2bac012 100644
 --- a/CMake/lrs_options.cmake
 +++ b/CMake/lrs_options.cmake
-@@ -17,7 +17,7 @@ option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Impl
+@@ -16,7 +16,7 @@ option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Impl
  option(BUILD_CV_EXAMPLES "Build OpenCV examples" OFF)
  option(BUILD_DLIB_EXAMPLES "Build DLIB examples - requires DLIB_DIR" OFF)
  option(BUILD_PCL_EXAMPLES "Build PCL examples" OFF)
@@ -20,7 +20,7 @@ index bc69740..9d937fd 100644
  option(ENFORCE_METADATA "Require WinSDK with Metadata support during compilation. Windows OS Only" OFF)
  option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
  option(BUILD_PYTHON_DOCS "Build Documentation for Python bindings" OFF)
-@@ -30,7 +30,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
+@@ -29,7 +29,7 @@ option(BUILD_NODEJS_BINDINGS "Build Node.js bindings" OFF)
  option(BUILD_OPENNI2_BINDINGS "Build OpenNI bindings" OFF)
  option(IMPORT_DEPTH_CAM_FW "Download the latest firmware for the depth cameras" ON)
  option(BUILD_CV_KINFU_EXAMPLE "Build OpenCV KinectFusion example" OFF)
