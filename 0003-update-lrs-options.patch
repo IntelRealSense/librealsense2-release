@@ -1,7 +1,7 @@
-From eb62794282fd20c7ccb0d116286bc1445aeb993f Mon Sep 17 00:00:00 2001
+From 012086ee31f8280790ad1d104c043b3b78ae490e Mon Sep 17 00:00:00 2001
 From: SamerKhshiboun <samer.khshiboun@intel.com>
 Date: Tue, 13 Sep 2022 14:02:49 +0300
-Subject: [PATCH 3/3] update lrs options
+Subject: [PATCH 3/4] update lrs options
 
 ---
  CMake/lrs_options.cmake | 6 +++---

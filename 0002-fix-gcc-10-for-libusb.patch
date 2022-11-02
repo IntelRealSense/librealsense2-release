@@ -1,7 +1,7 @@
-From 72eeeff5c5edc928581471e851af96d28e81ac65 Mon Sep 17 00:00:00 2001
+From 50b14b72113a9394bc6e7cbeb5041480bf6b73ea Mon Sep 17 00:00:00 2001
 From: SamerKhshiboun <samer.khshiboun@intel.com>
 Date: Tue, 13 Sep 2022 14:00:49 +0300
-Subject: [PATCH 2/3] fix gcc 10 for libusb
+Subject: [PATCH 2/4] fix gcc 10 for libusb
 
 ---
  src/libusb/libusb.h | 6 +++---
