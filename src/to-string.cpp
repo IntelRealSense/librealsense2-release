@@ -171,6 +171,34 @@ const char * get_string( rs2_host_perf_mode value )
 #undef CASE
 }
 
+const char * get_string( rs2_emitter_frequency_mode mode )
+{
+#define CASE( X ) STRCASE( EMITTER_FREQUENCY, X )
+    switch( mode )
+    {
+    CASE( 57_KHZ )
+    CASE( 91_KHZ )
+    default:
+        assert( ! is_valid( mode ) );
+        return UNKNOWN_VALUE;
+    }
+#undef CASE
+}
+
+const char * get_string( rs2_depth_auto_exposure_mode mode )
+{
+#define CASE( X ) STRCASE( DEPTH_AUTO_EXPOSURE, X )
+    switch( mode )
+    {
+    CASE( REGULAR )
+    CASE( ACCELERATED )
+    default:
+        assert( ! is_valid( mode ) );
+        return UNKNOWN_VALUE;
+    }
+#undef CASE
+}
+
 const char * get_string( rs2_extension value )
 {
 #define CASE( X ) STRCASE( EXTENSION, X )
@@ -221,7 +249,7 @@ const char * get_string( rs2_extension value )
     CASE( COLOR_SENSOR )
     CASE( MOTION_SENSOR )
     CASE( FISHEYE_SENSOR )
-    CASE( DEPTH_HUFFMAN_DECODER )
+    CASE( DEPTH_HUFFMAN_DECODER ) // Deprecated
     CASE( SERIALIZABLE )
     CASE( FW_LOGGER )
     CASE( AUTO_CALIBRATION_FILTER )
@@ -299,7 +327,7 @@ const char * get_string( rs2_option value )
     CASE( VISUAL_PRESET )
     CASE( TOTAL_FRAME_DROPS )
     CASE( EMITTER_ENABLED )
-    CASE( AUTO_EXPOSURE_MODE )
+    case RS2_OPTION_AUTO_EXPOSURE_MODE:  return "Fisheye Auto Exposure Mode";
     CASE( POWER_LINE_FREQUENCY )
     CASE( ASIC_TEMPERATURE )
     CASE( ERROR_POLLING_ENABLED )
@@ -370,8 +398,10 @@ const char * get_string( rs2_option value )
     CASE( TRANSMITTER_FREQUENCY )
     CASE( VERTICAL_BINNING )
     CASE( RECEIVER_SENSITIVITY )
-    CASE(AUTO_EXPOSURE_LIMIT_TOGGLE)
-    CASE(AUTO_GAIN_LIMIT_TOGGLE)
+    CASE( AUTO_EXPOSURE_LIMIT_TOGGLE )
+    CASE( AUTO_GAIN_LIMIT_TOGGLE )
+    CASE( EMITTER_FREQUENCY )
+    case RS2_OPTION_DEPTH_AUTO_EXPOSURE_MODE:  return "Auto Exposure Mode";
     default:
         assert( ! is_valid( value ) );
         return UNKNOWN_VALUE;
@@ -509,6 +539,14 @@ const char * get_string( rs2_frame_metadata_value value )
     CASE( SEQUENCE_NAME )
     CASE( SEQUENCE_ID )
     CASE( SEQUENCE_SIZE )
+    CASE( TRIGGER )
+    CASE( PRESET )
+    CASE( INPUT_WIDTH )
+    CASE( INPUT_HEIGHT )
+    CASE( SUB_PRESET_INFO )
+    CASE( CALIB_INFO )
+    CASE( CRC )
+
     default:
         assert( ! is_valid( value ) );
         return UNKNOWN_VALUE;
@@ -633,3 +671,5 @@ const char * rs2_cah_trigger_to_string( int mode ) { return "DEPRECATED as of 2.
 const char * rs2_calibration_type_to_string( rs2_calibration_type type ) { return librealsense::get_string( type ); }
 const char * rs2_calibration_status_to_string( rs2_calibration_status status ) { return librealsense::get_string( status ); }
 const char * rs2_host_perf_mode_to_string( rs2_host_perf_mode mode ) { return librealsense::get_string( mode ); }
+const char * rs2_emitter_frequency_mode_to_string( rs2_emitter_frequency_mode mode ) { return librealsense::get_string( mode ); }
+const char * rs2_depth_auto_exposure_mode_to_string( rs2_depth_auto_exposure_mode mode ) { return librealsense::get_string( mode ); }

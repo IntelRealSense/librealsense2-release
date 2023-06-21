@@ -20,7 +20,7 @@
 
 #define ARCBALL_CAMERA_IMPLEMENTATION
 #include <arcball_camera.h>
-#include <librealsense2/utilities/string/trim-newlines.h>
+#include <rsutils/string/trim-newlines.h>
 #include "../common/utilities/imgui/wrap.h"
 
 namespace rs2
@@ -48,64 +48,6 @@ namespace rs2
         else
             s.frame_ready(std::move(f));
     }) {}
-
-    void viewer_model::render_pose(rs2::rect stream_rect, float buttons_heights)
-    {
-        int num_of_pose_buttons = 2; // trajectory, info
-
-        // Draw selection buttons on the pose header, the buttons are global to all the streaming devices
-        ImGui::SetCursorPos({ stream_rect.w - 32 * num_of_pose_buttons - 5, buttons_heights });
-
-        bool color_icon = pose_info_object_button.is_pressed(); //draw trajectory is on - color the icon
-        if (color_icon)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
-            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue);
-        }
-
-        // Draw info object button (is not synchronized with the info buttons in the 2D view)
-        if (ImGui::Button(pose_info_object_button.get_icon().c_str(), { 24, buttons_heights }))
-        {
-            pose_info_object_button.toggle_button();
-        }
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip("%s", pose_info_object_button.get_tooltip().c_str());
-        }
-        if (color_icon)
-        {
-            ImGui::PopStyleColor(2);
-        }
-
-        // Draw grid object button
-        ImGui::SameLine();
-
-        color_icon = trajectory_button.is_pressed(); //draw trajectory is on - color the icon
-        if (color_icon)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text, light_blue);
-            ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, light_blue);
-        }
-        if (ImGui::Button(trajectory_button.get_icon().c_str(), { 24, buttons_heights }))
-        {
-            trajectory_button.toggle_button();
-            for (auto&& s : streams)
-            {
-                if (s.second.profile.stream_type() == RS2_STREAM_POSE)
-                    streams[s.second.profile.unique_id()].dev->tm2.record_trajectory(trajectory_button.is_pressed());
-            }
-        }
-        if (color_icon)
-        {
-            ImGui::PopStyleColor(2);
-        }
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip("%s", trajectory_button.get_tooltip().c_str());
-        }
-
-        //ImGui::End();
-    }
 
     // Need out of class declaration to take reference
     const rs2_option save_to_ply::OPTION_IGNORE_COLOR;
@@ -264,7 +206,7 @@ namespace rs2
                         }
 
                         std::string fname(ret);
-                        if (!ends_with(utilities::string::to_lower(fname), curr_exporter->second.extension)) fname += curr_exporter->second.extension;
+                        if (!ends_with(rsutils::string::to_lower(fname), curr_exporter->second.extension)) fname += curr_exporter->second.extension;
 
                         std::unique_ptr<rs2::filter> exporter;
                         if (tab == export_type::ply)
@@ -422,7 +364,7 @@ namespace rs2
                 auto dev_name = s.second.dev ? s.second.dev->dev.get_info(RS2_CAMERA_INFO_NAME) : "Unknown";
                 auto stream_name = rs2_stream_to_string(s.second.profile.stream_type());
 
-                depth_sources_str.push_back(to_string() << dev_name << " " << stream_name);
+                depth_sources_str.push_back( rsutils::string::from() << dev_name << " " << stream_name );
 
                 i++;
             }
@@ -468,7 +410,7 @@ namespace rs2
                     std::string stream_name = rs2_stream_to_string(s.second.profile.stream_type());
                     if (s.second.profile.stream_index())
                         stream_name += "_" + std::to_string(s.second.profile.stream_index());
-                    tex_sources_str.push_back(to_string() << dev_name << " " << stream_name);
+                    tex_sources_str.push_back( rsutils::string::from() << dev_name << " " << stream_name );
 
                     i++;
                 }
@@ -498,7 +440,7 @@ namespace rs2
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, header_window_bg);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, header_window_bg);
 
-        std::string label = to_string() << "header of 3dviewer";
+        std::string label = "header of 3dviewer";
 
         ImGui::GetWindowDrawList()->AddRectFilled({ stream_rect.x, stream_rect.y },
                      { stream_rect.x + stream_rect.w, stream_rect.y + top_bar_height }, ImColor(sensor_bg));
@@ -599,7 +541,7 @@ namespace rs2
                     s.second.texture->get_last_frame() &&
                     s.second.profile.stream_type() == RS2_STREAM_DEPTH)
                 {
-                    std::string id = to_string() << depth_sources_str[i] << "##DepthSource-" << i;
+                    std::string id = rsutils::string::from() << depth_sources_str[i] << "##DepthSource-" << i;
 
                     bool selected = i == selected_depth_source;
                     if (ImGui::MenuItem(id.c_str(), nullptr, &selected))
@@ -645,7 +587,7 @@ namespace rs2
 
             for (int i = 0; i < tex_sources_str.size(); i++)
             {
-                std::string id = to_string() << tex_sources_str[i] << "##TexSource-" << i;
+                std::string id = rsutils::string::from() << tex_sources_str[i] << "##TexSource-" << i;
 
                 bool selected = i == selected_tex_source;
                 if (ImGui::MenuItem(id.c_str(), nullptr, &selected))
@@ -735,22 +677,6 @@ namespace rs2
         }
         left += 60;
 
-        // -------------------- Trajectory (T265) -------------------
-
-        active = trajectory_button.is_pressed();
-        if (big_button(&active, win, 5 + left, 0, u8"\uf1b0",
-            "Route", false, pose_render, "Show 6-dof Pose Trajectory\nRequires T265 tracking device"))
-        {
-            trajectory_button.toggle_button();
-            for (auto&& s : streams)
-            {
-                if (s.second.profile.stream_type() == RS2_STREAM_POSE)
-                    streams[s.second.profile.unique_id()].dev->tm2.record_trajectory(trajectory_button.is_pressed());
-            }
-        }
-
-        left += 60;
-
         // -------------------- Export ------------------
 
         static config_file temp_cfg;
@@ -838,7 +764,7 @@ namespace rs2
                 std::string tmp = realsense_udev_rules;
                 tmp.erase(tmp.find_last_of("\n") + 1);
                 const std::string udev = tmp;
-                float udev_file_ver{}, built_in_file_ver{};
+                float udev_file_ver{0}, built_in_file_ver{0};
 
                 // The udev-rules file shall start with version token expressed as ##Version=xx.yy##
                 std::regex udev_ver_regex("^##Version=(\\d+\\.\\d+)##");
@@ -867,7 +793,7 @@ namespace rs2
 
             if (create_file)
             {
-                std::string tmp_filename = to_string() << get_folder_path(special_folder::app_data) << "/.99-realsense-libusb.rules";
+                std::string tmp_filename = rsutils::string::from() << get_folder_path(special_folder::app_data) << "/.99-realsense-libusb.rules";
 
                 std::ofstream out(tmp_filename.c_str());
                 out << realsense_udev_rules;
@@ -971,7 +897,7 @@ namespace rs2
         updates = std::make_shared<updates_model>();
         reset_camera();
         rs2_error* e = nullptr;
-        not_model->add_log(to_string() << "librealsense version: " << api_version_to_string(rs2_get_api_version(&e)) << "\n");
+        not_model->add_log( "librealsense version: " + api_version_to_string( rs2_get_api_version( &e ) ) + "\n" );
 
         update_configuration();
 
@@ -1097,14 +1023,16 @@ namespace rs2
             std::string wrapped_msg;
             try
             {
-                auto trimmed_msg = utilities::string::trim_newlines(msg);
+                auto trimmed_msg = rsutils::string::trim_newlines(msg);
                 wrapped_msg = utilities::imgui::wrap(trimmed_msg, 500);
             }
             catch (...)
             {
                 wrapped_msg = msg; // Revert to original text on wrapping failure
-                not_model->output.add_log(RS2_LOG_SEVERITY_WARN, __FILE__, __LINE__,
-                    to_string() << "Wrapping of error message text failed!");
+                not_model->output.add_log( RS2_LOG_SEVERITY_WARN,
+                                           __FILE__,
+                                           __LINE__,
+                                           "Wrapping of error message text failed!" );
             }
 
             ImGui::Text("RealSense error calling:");
@@ -1176,7 +1104,7 @@ namespace rs2
     {
         ImGui_ScopePushFont(font_18);
 
-        std::string label = to_string() << label_str << id;
+        std::string label = rsutils::string::from() << label_str << id;
 
         ImGui::SetCursorScreenPos({(float)x, (float)y});
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
@@ -1203,7 +1131,7 @@ namespace rs2
         ImGui::SetCursorScreenPos({ (min_x + max_x) / 2.f - 150, (min_y + max_y) / 2.f - 20 });
 
         ImGui::PushStyleColor(ImGuiCol_Text, sensor_header_light_blue);
-        std::string text = to_string() << "Nothing is streaming! Toggle " << textual_icons::toggle_off << " to start";
+        std::string text = rsutils::string::from() << "Nothing is streaming! Toggle " << textual_icons::toggle_off << " to start";
         ImGui::Text("%s", text.c_str());
         ImGui::PopStyleColor();
 
@@ -1214,7 +1142,7 @@ namespace rs2
 
     void viewer_model::show_rendering_not_supported(ImFont* font_18, int min_x, int min_y, int max_x, int max_y, rs2_format format)
     {
-        static utilities::time::periodic_timer update_string(std::chrono::milliseconds(200));
+        static rsutils::time::periodic_timer update_string(std::chrono::milliseconds(200));
         static int counter = 0;
         static std::string to_print;
         auto pos = ImGui::GetCursorScreenPos();
@@ -1222,10 +1150,10 @@ namespace rs2
         ImGui::PushFont(font_18);
         ImGui::SetCursorScreenPos({ min_x + max_x / 2.f - 210, min_y + max_y / 2.f - 20 });
         ImGui::PushStyleColor(ImGuiCol_Text, yellowish);
-        std::string text = to_string() << textual_icons::exclamation_triangle;
+        std::string text = rsutils::string::from() << textual_icons::exclamation_triangle;
         ImGui::Text("%s", text.c_str());
         ImGui::SetCursorScreenPos({ min_x + max_x / 2.f - 180, min_y + max_y / 2.f - 20 });
-        text = to_string() <<  " The requested format " << format << " is not supported for rendering  ";
+        text = rsutils::string::from() <<  " The requested format " << format << " is not supported for rendering  ";
 
         if (update_string)
         {
@@ -1273,13 +1201,28 @@ namespace rs2
         auto cell_width = static_cast<float>(r.w / factor);
         auto cell_height = static_cast<float>(r.h / complement);
 
-        auto it = active_streams.begin();
+        // using the active streams sorted acc to stream type and stream index
+        // typical order will then be: depth, color, ir1, ir2, motion....
+        std::vector<stream_model*> active_streams_ordered;
+        for (auto&& active_stream : active_streams)
+        {
+            active_streams_ordered.push_back(active_stream);
+        }
+
+        std::sort(active_streams_ordered.begin(), active_streams_ordered.end(),
+            [](const stream_model* sm1, const stream_model* sm2)
+            {
+                return (sm1->profile.stream_type() < sm2->profile.stream_type()) ||
+                    ((sm1->profile.stream_type() == sm2->profile.stream_type()) && (sm1->profile.stream_index() < sm2->profile.stream_index()));
+            });
+
+        auto it = active_streams_ordered.begin();
         for (auto x = 0; x < factor; x++)
         {
             for (auto y = 0; y < complement; y++)
             {
                 // There might be spare boxes at the end (3 streams in 2x2 array for example)
-                if (it == active_streams.end()) break;
+                if (it == active_streams_ordered.end()) break;
 
                 rect rxy = { r.x + x * cell_width, r.y + y * cell_height + top_bar_height,
                     cell_width, cell_height - top_bar_height };
@@ -1411,16 +1354,6 @@ namespace rs2
                     if (!paused)
                         p = f.as< points >();
                     continue;
-                }
-
-                if( f.is< pose_frame >() )  // Aggregate the trajectory in pause mode to make the
-                                            // path consistent
-                {
-                    auto dev = streams[f.get_profile().unique_id()].dev;
-                    if( dev )
-                    {
-                        dev->tm2.update_model_trajectory( f.as< pose_frame >(), ! paused );
-                    }
                 }
 
                 auto texture = upload_frame( std::move( f ) );
@@ -1694,7 +1627,7 @@ namespace rs2
         ImFont *font1, ImFont *font2, size_t dev_model_num,
         const mouse_info &mouse, std::string& error_message)
     {
-        static utilities::time::periodic_timer every_sec(std::chrono::seconds(1));
+        static rsutils::time::periodic_timer every_sec(std::chrono::seconds(1));
         static bool icon_visible = false;
         if (every_sec) icon_visible = !icon_visible;
         float alpha = icon_visible ? 1.f : 0.2f;
@@ -1726,7 +1659,7 @@ namespace rs2
 
             if (!stream_mv.is_stream_alive())
             {
-                std::string message = to_string() << textual_icons::exclamation_triangle << " No Frames Received!";
+                std::string message = rsutils::string::from() << textual_icons::exclamation_triangle << " No Frames Received!";
                 show_icon(font2, "warning_icon", message.c_str(),
                     static_cast<int>(stream_rect.center().x - 100),
                     static_cast<int>(stream_rect.center().y - 25),
@@ -1883,7 +1816,7 @@ namespace rs2
 
                     if( fabs(object.mean_depth) > 0.f )
                     {
-                        std::string str = to_string() << std::setprecision( 2 ) << object.mean_depth << " m";
+                        std::string str = rsutils::string::from() << std::setprecision( 2 ) << object.mean_depth << " m";
                         auto size = ImGui::CalcTextSize( str.c_str() );
                         if( size.y < h  &&  size.x < bbox.w )
                         {
@@ -2067,67 +2000,6 @@ namespace rs2
             { 0 , 0, 1, 0 },
             { 0, 0, 0, 1 }
         };
-        rs2::matrix4 rx(_rx);
-        rs2::matrix4 rz(_rz);
-
-        int stream_num = 0; // counter to locate the pose info window correctly (currently works for up to 3 streaming devices)
-        pose_frame pose = frame{};
-        for (auto&& stream : streams)
-        {
-            if (stream.second.profile.stream_type() == RS2_STREAM_POSE)
-            {
-                auto f = stream.second.texture->get_last_frame();
-                if (!f.is<pose_frame>())
-                {
-                    continue;
-                }
-
-                pose = f;
-                rs2_pose pose_data = pose.get_pose_data();
-
-                auto t = tm2_pose_to_world_transformation(pose_data);
-                float model[4][4];
-                t.to_column_major((float*)model);
-                auto m = model;
-
-                r1 = m * rx;
-                r2 = rz * m * rx;
-
-                // set the pose transformation as the model matrix to draw the axis
-                glMatrixMode(GL_MODELVIEW);
-                glPushMatrix();
-                glLoadMatrixf(view);
-
-                glMultMatrixf((float*)_rx);
-
-                streams[f.get_profile().unique_id()].dev->tm2.draw_trajectory(trajectory_button.is_pressed());
-
-                // remove model matrix from the rest of the render
-                glPopMatrix();
-
-                _cam_renderer.set_matrix(RS2_GL_MATRIX_CAMERA, r2 * view_mat);
-                _cam_renderer.set_matrix(RS2_GL_MATRIX_PROJECTION, perspective_mat);
-
-                if (f)
-                {
-                    glDisable(GL_DEPTH_TEST);
-                    glEnable(GL_BLEND);
-
-                    glBlendFunc(GL_ONE, GL_ONE);
-
-                    // Render camera model (based on source_frame camera type)
-                    f.apply_filter(_cam_renderer);
-
-                    glDisable(GL_BLEND);
-                    glEnable(GL_DEPTH_TEST);
-                }
-
-                stream_num++;
-            }
-        }
-
-
-        check_gl_error();
 
         {
             float tiles = 24;
@@ -2161,7 +2033,7 @@ namespace rs2
 
         check_gl_error();
 
-        if (!pose && !_pc_selected)
+        if (!_pc_selected)
         {
             glMatrixMode(GL_MODELVIEW);
             glPushMatrix();
@@ -2221,6 +2093,10 @@ namespace rs2
         {
             auto vf_profile = last_points.get_profile().as<video_stream_profile>();
             // Non-linear correspondence customized for non-flat surface exploration
+
+            if (vf_profile.width() <= 0)
+                throw std::runtime_error("Profile width must be greater than 0.");
+
             glPointSize(std::sqrt(viewer_rect.w / vf_profile.width()));
 
             auto tex = last_texture->get_gl_handle();
@@ -2848,7 +2724,7 @@ namespace rs2
                             try
                             {
                                 std::string filename = ret;
-                                filename = utilities::string::to_lower(filename);
+                                filename = rsutils::string::to_lower(filename);
                                 if (!ends_with(filename, ".json")) filename += ".json";
                                 temp_cfg.save(filename.c_str());
                             }

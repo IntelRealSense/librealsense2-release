@@ -5,6 +5,7 @@
 #include "core/video.h"
 #include "core/motion.h"
 #include "device.h"
+#include <rsutils/string/from.h>
 
 using namespace librealsense;
 
@@ -169,14 +170,22 @@ device::device(std::shared_ptr<context> ctx,
                const platform::backend_device_group group,
                bool device_changed_notifications)
     : _context(ctx), _group(group), _is_valid(true),
-      _device_changed_notifications(device_changed_notifications)
+      _device_changed_notifications(device_changed_notifications),
+      _is_alive( std::make_shared< bool >( true ) )
 {
     _profiles_tags = lazy<std::vector<tagged_profile>>([this]() { return get_profiles_tags(); });
 
     if (_device_changed_notifications)
     {
-        auto cb = new devices_changed_callback_internal([this](rs2_device_list* removed, rs2_device_list* added)
+        std::weak_ptr< bool > weak = _is_alive;
+        auto cb = new devices_changed_callback_internal([this, weak](rs2_device_list* removed, rs2_device_list* added)
         {
+            // The callback can be called from one thread while the object is being destroyed by another.
+            // Check if members can still be accessed.
+            auto alive = weak.lock();
+            if( ! alive || ! *alive )
+                return;
+
             // Update is_valid variable when device is invalid
             std::lock_guard<std::mutex> lock(_device_changed_mtx);
             for (auto& dev_info : removed->list)
@@ -195,6 +204,8 @@ device::device(std::shared_ptr<context> ctx,
 
 device::~device()
 {
+    *_is_alive = false;
+
     if (_device_changed_notifications)
     {
         _context->unregister_internal_device_callback(_callback_id);
@@ -217,7 +228,8 @@ int device::assign_sensor(const std::shared_ptr<sensor_interface>& sensor_base, 
     }
     catch (std::out_of_range)
     {
-        throw invalid_value_exception(to_string() << "Cannot assign sensor - invalid subdevice value" << idx);
+        throw invalid_value_exception( rsutils::string::from()
+                                       << "Cannot assign sensor - invalid subdevice value" << idx );
     }
 }
 
@@ -263,7 +275,8 @@ const sensor_interface& device::get_sensor(size_t subdevice) const
 
 void device::hardware_reset()
 {
-    throw not_implemented_exception(to_string() << __FUNCTION__ << " is not implemented for this device!");
+    throw not_implemented_exception( rsutils::string::from()
+                                     << __FUNCTION__ << " is not implemented for this device!" );
 }
 
 std::shared_ptr<matcher> device::create_matcher(const frame_holder& frame) const
@@ -280,7 +293,9 @@ std::pair<uint32_t, rs2_extrinsics> device::get_extrinsics(const stream_interfac
     rs2_extrinsics ext{};
     if (environment::get_instance().get_extrinsics_graph().try_fetch_extrinsics(*pin_stream, stream, &ext) == false)
     {
-        throw std::runtime_error(to_string() << "Failed to fetch extrinsics between pin stream (" << pin_stream->get_unique_id() << ") to given stream (" << stream.get_unique_id() << ")");
+        throw std::runtime_error( rsutils::string::from()
+                                  << "Failed to fetch extrinsics between pin stream (" << pin_stream->get_unique_id()
+                                  << ") to given stream (" << stream.get_unique_id() << ")" );
     }
     return std::make_pair(pair.first, ext);
 }
@@ -312,6 +327,7 @@ std::vector<rs2_format> device::map_supported_color_formats(rs2_format source_fo
     case RS2_FORMAT_YUYV:
         target_formats.push_back(RS2_FORMAT_YUYV);
         target_formats.push_back(RS2_FORMAT_Y16);
+        target_formats.push_back(RS2_FORMAT_Y8);
         break;
     case RS2_FORMAT_UYVY:
         target_formats.push_back(RS2_FORMAT_UYVY);

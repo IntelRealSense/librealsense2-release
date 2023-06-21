@@ -26,6 +26,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/disparity-transform.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/y8i-to-y8y8.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/y12i-to-y16y16.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/y12i-to-y16y16-mipi.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/identity-processing-block.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/threshold.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/rates-printer.cpp"
@@ -36,7 +37,6 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/depth-formats-converter.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/motion-transform.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/auto-exposure-processor.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/depth-decompress.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/y411-converter.cpp"
 
         "${CMAKE_CURRENT_LIST_DIR}/processing-blocks-factory.h"
@@ -55,6 +55,7 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/disparity-transform.h"
         "${CMAKE_CURRENT_LIST_DIR}/y8i-to-y8y8.h"
         "${CMAKE_CURRENT_LIST_DIR}/y12i-to-y16y16.h"
+        "${CMAKE_CURRENT_LIST_DIR}/y12i-to-y16y16-mipi.h"
         "${CMAKE_CURRENT_LIST_DIR}/identity-processing-block.h"
         "${CMAKE_CURRENT_LIST_DIR}/threshold.h"
         "${CMAKE_CURRENT_LIST_DIR}/rates-printer.h"
@@ -65,6 +66,5 @@ target_sources(${LRS_TARGET}
         "${CMAKE_CURRENT_LIST_DIR}/depth-formats-converter.h"
         "${CMAKE_CURRENT_LIST_DIR}/motion-transform.h"
         "${CMAKE_CURRENT_LIST_DIR}/auto-exposure-processor.h"
-        "${CMAKE_CURRENT_LIST_DIR}/depth-decompress.h"
         "${CMAKE_CURRENT_LIST_DIR}/y411-converter.h"
 )

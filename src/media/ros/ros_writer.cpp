@@ -8,12 +8,13 @@
 #include "proc/temporal-filter.h"
 #include "proc/hole-filling-filter.h"
 #include "proc/zero-order.h"
-#include "proc/depth-decompress.h"
 #include "proc/hdr-merge.h"
 #include "proc/sequence-id-filter.h"
 #include "ros_writer.h"
 #include "l500/l500-motion.h"
 #include "l500/l500-depth.h"
+
+#include <rsutils/string/from.h>
 
 namespace librealsense
 {
@@ -297,13 +298,13 @@ namespace librealsense
         //Write frame's timestamp as metadata
         diagnostic_msgs::KeyValue frame_timestamp_msg;
         frame_timestamp_msg.key = FRAME_TIMESTAMP_MD_STR;
-        frame_timestamp_msg.value = to_string() << std::hexfloat << std::fixed << pose->get_frame_timestamp();
+        frame_timestamp_msg.value = rsutils::string::from() << std::hexfloat << std::fixed << pose->get_frame_timestamp();
         write_message(md_topic, timestamp, frame_timestamp_msg);
 
         //Write frame's number as external param
         diagnostic_msgs::KeyValue frame_num_msg;
         frame_num_msg.key = FRAME_NUMBER_MD_STR;
-        frame_num_msg.value = to_string() << pose->get_frame_number();
+        frame_num_msg.value = rsutils::string::from( pose->get_frame_number() );
         write_message(md_topic, timestamp, frame_num_msg);
 
         // Write the rest of the frame metadata and stream extrinsics
@@ -452,7 +453,7 @@ namespace librealsense
             break;
         }
         default:
-            throw invalid_value_exception(to_string() << "Failed to Write Extension Snapshot: Unsupported extension \"" << librealsense::get_string(type) << "\"");
+            throw invalid_value_exception( rsutils::string::from() << "Failed to Write Extension Snapshot: Unsupported extension \"" << librealsense::get_string(type) << "\"");
         }
     }
 
@@ -475,7 +476,7 @@ namespace librealsense
     {
         float value = option.query();
         const char* str = option.get_description();
-        std::string description = str ? std::string(str) : (to_string() << "Read only option of " << librealsense::get_string(type));
+        std::string description = str ? std::string(str) : (rsutils::string::from() << "Read only option of " << librealsense::get_string(type));
 
         //One message for value
         std_msgs::Float32 option_msg;
@@ -549,18 +550,19 @@ namespace librealsense
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_TEMPORAL_FILTER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_HOLE_FILLING_FILTER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_ZERO_ORDER_FILTER);
-        RETURN_IF_EXTENSION(block, RS2_EXTENSION_DEPTH_HUFFMAN_DECODER);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_HDR_MERGE);
         RETURN_IF_EXTENSION(block, RS2_EXTENSION_SEQUENCE_ID_FILTER);
 
 #undef RETURN_IF_EXTENSION
 
-        throw invalid_value_exception(to_string() << "processing block "<< block->get_info(RS2_CAMERA_INFO_NAME) <<"has no map to extension");
+        throw invalid_value_exception( rsutils::string::from()
+                                       << "processing block " << block->get_info( RS2_CAMERA_INFO_NAME )
+                                       << "has no map to extension" );
     }
 
     void ros_writer::write_sensor_processing_blocks(device_serializer::sensor_identifier sensor_id, const nanoseconds& timestamp, std::shared_ptr<recommended_proccesing_blocks_interface> proccesing_blocks)
     {
-        rs2_extension ext;
+        rs2_extension ext = RS2_EXTENSION_UNKNOWN;
         for (auto block : proccesing_blocks->get_recommended_processing_blocks())
         {
             try
