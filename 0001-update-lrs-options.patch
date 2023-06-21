@@ -1,0 +1,33 @@
+From fa871b9105742a46d312386aae93fb379da0ec92 Mon Sep 17 00:00:00 2001
+From: SamerKhshiboun <samer.khshiboun@intel.com>
+Date: Wed, 21 Jun 2023 22:18:52 +0300
+Subject: [PATCH] update lrs options
+
+---
+ CMake/lrs_options.cmake | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
+index e61f5a2..63d24a7 100644
+--- a/CMake/lrs_options.cmake
++++ b/CMake/lrs_options.cmake
+@@ -1,4 +1,4 @@
+-option(ENABLE_CCACHE "Build with ccache." ON)
++option(ENABLE_CCACHE "Build with ccache." OFF)
+ option(BUILD_WITH_CUDA "Enable CUDA" OFF)
+ option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
+ option(BUILD_WITH_OPENMP "Use OpenMP" OFF)
+@@ -10,8 +10,8 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
+ option(BUILD_UNIT_TESTS "Build LibCI unit tests. If enabled, additional test data may be downloaded" OFF)
+ option(BUILD_LEGACY_LIVE_TEST "Build the live-test.exe test used in Travis. If enabled, additional test data may be downloaded" OFF)
+ option(BUILD_INTERNAL_UNIT_TESTS "Test package for components under librealsense namespace, requires BUILD_SHARED_LIBS=OFF and BUILD_UNIT_TESTS=ON" OFF)
+-option(BUILD_EXAMPLES "Build examples (not including graphical examples -- see BUILD_GRAPHICAL_EXAMPLES)" ON)
+-option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Implies BUILD_GLSL_EXTENSIONS" ON)
++option(BUILD_EXAMPLES "Build examples (not including graphical examples -- see BUILD_GRAPHICAL_EXAMPLES)" OFF)
++option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Implies BUILD_GLSL_EXTENSIONS" OFF)
+ option(BUILD_CV_EXAMPLES "Build OpenCV examples" OFF)
+ option(BUILD_DLIB_EXAMPLES "Build DLIB examples - requires DLIB_DIR" OFF)
+ option(BUILD_PCL_EXAMPLES "Build PCL examples" OFF)
+-- 
+2.34.1
+
