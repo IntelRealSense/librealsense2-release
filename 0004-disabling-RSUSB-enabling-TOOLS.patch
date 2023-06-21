@@ -30,5 +30,5 @@ index c98d027..2bac012 100644
  option(FORCE_LIBUVC "Explicitly turn-on libuvc backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
  option(FORCE_WINUSB_UVC "Explicitly turn-on winusb_uvc (for win7) backend - deprecated, use FORCE_RSUSB_BACKEND instead" OFF)
 -- 
-2.25.1
+2.34.1
 
