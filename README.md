@@ -1,3 +1,26 @@
+## librealsense2 (foxy) - 2.54.1-1
+
+The packages in the `librealsense2` repository were released into the `foxy` distro by running `/usr/bin/bloom-release --ros-distro foxy --track foxy librealsense2 --edit -d` on `Wed, 21 Jun 2023 14:02:08 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: https://github.com/IntelRealSense/librealsense2-release.git
+- rosdistro version: `2.51.1-1`
+- old version: `2.51.1-1`
+- new version: `2.54.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.11.2`
+- catkin_pkg version: `0.5.2`
+- rosdep version: `0.22.2`
+- rosdistro version: `0.9.0`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (humble) - 2.54.1-1
 
 The packages in the `librealsense2` repository were released into the `humble` distro by running `/usr/bin/bloom-release --ros-distro humble --track humble librealsense2 --edit -d` on `Wed, 21 Jun 2023 12:18:07 -0000`
