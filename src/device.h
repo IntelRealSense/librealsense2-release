@@ -87,6 +87,7 @@ public:
 
     bool device_changed_notifications_on() const { return _device_changed_notifications; }
 
+    uint16_t _pid;
 protected:
     int add_sensor(const std::shared_ptr<sensor_interface>& sensor_base);
     int assign_sensor(const std::shared_ptr<sensor_interface>& sensor_base, uint8_t idx);
@@ -107,6 +108,8 @@ private:
     mutable std::mutex _device_changed_mtx;
     uint64_t _callback_id;
     lazy<std::vector<tagged_profile>> _profiles_tags;
+
+    std::shared_ptr< bool > _is_alive; // Ensures object can be accessed
 };
 
 // Helper function that should be used when multiple FW calls needs to be made.
