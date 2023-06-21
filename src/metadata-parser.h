@@ -9,20 +9,11 @@
 #include "metadata.h"
 #include <cmath>
 
+#include <rsutils/string/from.h>
+
+
 namespace librealsense
 {
-/** \brief Metadata fields that are utilized internally by librealsense
-    Provides extention to the r2_frame_metadata list of attributes*/
-    enum frame_metadata_internal
-    {
-        RS2_FRAME_METADATA_HW_TYPE  =   RS2_FRAME_METADATA_COUNT +1 , /**< 8-bit Module type: RS4xx, IVCAM*/
-        RS2_FRAME_METADATA_SKU_ID                                   , /**< 8-bit SKU Id*/
-        RS2_FRAME_METADATA_FORMAT                                   , /**< 16-bit Frame format*/
-        RS2_FRAME_METADATA_WIDTH                                    , /**< 16-bit Frame width. pixels*/
-        RS2_FRAME_METADATA_HEIGHT                                   , /**< 16-bit Frame height. pixels*/
-        RS2_FRAME_METADATA_COUNT
-    };
-
     /**\brief Base class that establishes the interface for retrieving metadata attributes*/
     class md_attribute_parser_base
     {
@@ -82,6 +73,35 @@ namespace librealsense
             return false;
         }
         rs2_frame_metadata_value _type;
+    };
+
+
+    /**\brief metadata parser class - support metadata as array of (bool,rs2_metadata_type) */
+    class md_array_parser : public md_attribute_parser_base
+    {
+        rs2_frame_metadata_value _key;
+
+    public:
+        md_array_parser( rs2_frame_metadata_value key )
+            : _key( key )
+        {
+        }
+
+        rs2_metadata_type get( const frame & frm ) const override
+        {
+            auto pmd = reinterpret_cast< metadata_array_value const * >( frm.additional_data.metadata_blob.data() );
+            metadata_array_value const & value = pmd[_key];
+            if( ! value.is_valid )
+                throw invalid_value_exception( "Frame does not support this type of metadata" );
+            return value.value;
+        }
+
+        bool supports(const frame& frm) const override
+        {
+            auto pmd = reinterpret_cast< metadata_array_value const * >( frm.additional_data.metadata_blob.data() );
+            metadata_array_value const & value = pmd[_key];
+            return value.is_valid;
+        }
     };
 
 
@@ -151,10 +171,11 @@ namespace librealsense
 
             if( ( s->header.md_type_id != expected_type ) || ( s->header.md_size < sizeof( *s ) ) )
             {
-                std::string type = ( md_type_desc.count( s->header.md_type_id ) > 0 )
-                                     ? md_type_desc.at( s->header.md_type_id )
-                                     : ( to_string() << "0x" << std::hex
-                                                     << static_cast< uint32_t >( s->header.md_type_id ) << std::dec );
+                std::string type
+                    = ( md_type_desc.count( s->header.md_type_id ) > 0 )
+                        ? md_type_desc.at( s->header.md_type_id )
+                        : ( rsutils::string::from()
+                            << "0x" << std::hex << static_cast< uint32_t >( s->header.md_type_id ) << std::dec );
                 LOG_DEBUG( "Metadata mismatch - actual: " << type << ", expected: 0x" << std::hex
                                                           << (uint32_t)expected_type << std::dec << " ("
                                                           << md_type_desc.at( expected_type ) << ")" );
@@ -340,10 +361,10 @@ namespace librealsense
     };
 
 
-    class ds5_md_attribute_actual_fps : public md_attribute_parser_base
+    class ds_md_attribute_actual_fps : public md_attribute_parser_base
     {
     public:
-        ds5_md_attribute_actual_fps(bool discrete = true, attrib_modifyer  exposure_mod = [](const rs2_metadata_type& param) {return param; })
+        ds_md_attribute_actual_fps(bool discrete = true, attrib_modifyer  exposure_mod = [](const rs2_metadata_type& param) {return param; })
             : _fps_values{ 6, 15, 30, 60, 90 } , _exposure_modifyer(exposure_mod), _discrete(discrete)
         {}
 
