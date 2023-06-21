@@ -1,4 +1,4 @@
-From 012086ee31f8280790ad1d104c043b3b78ae490e Mon Sep 17 00:00:00 2001
+From 7f1f30909ccca0493339ef2cb78b3f0027d14d32 Mon Sep 17 00:00:00 2001
 From: SamerKhshiboun <samer.khshiboun@intel.com>
 Date: Tue, 13 Sep 2022 14:02:49 +0300
 Subject: [PATCH 3/4] update lrs options
@@ -29,5 +29,5 @@ index 3e54a3b..2bac012 100644
  option(BUILD_DLIB_EXAMPLES "Build DLIB examples - requires DLIB_DIR" OFF)
  option(BUILD_PCL_EXAMPLES "Build PCL examples" OFF)
 -- 
-2.25.1
+2.34.1
 

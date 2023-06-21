@@ -1,4 +1,4 @@
-From 04b539ead9c8829a76d224c3738712c6721dc1fb Mon Sep 17 00:00:00 2001
+From 725d3e212ac7870c8ef9c1ce54cfda156f3e5fee Mon Sep 17 00:00:00 2001
 From: SamerKhshiboun <samer.khshiboun@intel.com>
 Date: Wed, 2 Nov 2022 10:52:07 +0200
 Subject: [PATCH 4/4] disable link time optimization for fw
@@ -25,5 +25,5 @@ index 5bd018d..4e04505 100644
    # lib.exe can't handle multiple .res files, so include them in one.
    # even then, the linker won't grab a .res out of a .lib object, so it needs to be explicitly listed
 -- 
-2.25.1
+2.34.1
 
