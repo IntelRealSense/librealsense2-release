@@ -9,40 +9,16 @@
 #include <array>
 #include <chrono>
 #include "ivcam/sr300.h"
-#include "ds5/ds5-factory.h"
+#include "ds/d400/d400-factory.h"
 #include "l500/l500-factory.h"
-#include "ds5/ds5-timestamp.h"
+#include "ds/ds-timestamp.h"
 #include "backend.h"
-#include "mock/recorder.h"
 #include <media/ros/ros_reader.h>
 #include "types.h"
 #include "stream.h"
 #include "environment.h"
 #include "context.h"
 #include "fw-update/fw-update-factory.h"
-
-#ifdef WITH_TRACKING
-#include "tm2/tm-info.h"
-#endif
-
-template<unsigned... Is> struct seq{};
-template<unsigned N, unsigned... Is>
-struct gen_seq : gen_seq<N-1, N-1, Is...>{};
-template<unsigned... Is>
-struct gen_seq<0, Is...> : seq<Is...>{};
-
-template<unsigned N1, unsigned... I1, unsigned N2, unsigned... I2>
-constexpr std::array<char const, N1+N2-1> concat(char const (&a1)[N1], char const (&a2)[N2], seq<I1...>, seq<I2...>){
-  return {{ a1[I1]..., a2[I2]... }};
-}
-
-template<unsigned N1, unsigned N2>
-constexpr std::array<char const, N1+N2-1> concat(char const (&a1)[N1], char const (&a2)[N2]){
-  return concat(a1, a2, gen_seq<N1-1>{}, gen_seq<N2>{});
-}
-
-// The string is used to retrieve the version embedded into .so file on Linux
-constexpr auto rs2_api_version = concat("VERSION: ",RS2_API_VERSION_STR);
 
 template<>
 bool contains(const std::shared_ptr<librealsense::device_info>& first,
@@ -95,33 +71,17 @@ namespace librealsense
         {rs_fourcc('M','J','P','G'), RS2_STREAM_COLOR},
     };
 
-    context::context(backend_type type,
-                     const char* filename,
-                     const char* section,
-                     rs2_recording_mode mode,
-                     std::string min_api_version)
+    context::context( backend_type type )
         : _devices_changed_callback(nullptr, [](rs2_devices_changed_callback*){})
     {
         static bool version_logged=false;
         if (!version_logged)
         {
             version_logged = true;
-            LOG_DEBUG("Librealsense " << std::string(std::begin(rs2_api_version),std::end(rs2_api_version)));
+            LOG_DEBUG( "Librealsense VERSION: " << RS2_API_VERSION_STR );
         }
 
-        switch(type)
-        {
-        case backend_type::standard:
-            _backend = platform::create_backend();
-            break;
-        case backend_type::record:
-            _backend = std::make_shared<platform::record_backend>(platform::create_backend(), filename, section, mode);
-            break;
-        case backend_type::playback:
-            _backend = std::make_shared<platform::playback_backend>(filename, section, min_api_version);
-            break;
-            // Strongly-typed enum. Default is redundant
-        }
+        _backend = platform::create_backend();
 
        environment::get_instance().set_time_service(_backend->create_time_service());
 
@@ -249,16 +209,17 @@ namespace librealsense
             for (auto&& info : uvc_infos)
                 devs.push_back(ctx->get_backend().create_uvc_device(info));
 
-            std::unique_ptr<frame_timestamp_reader> host_timestamp_reader_backup(new ds5_timestamp_reader(environment::get_instance().get_time_service()));
+            std::unique_ptr<frame_timestamp_reader> host_timestamp_reader_backup(new ds_timestamp_reader(environment::get_instance().get_time_service()));
             auto raw_color_ep = std::make_shared<uvc_sensor>("Raw RGB Camera",
                 std::make_shared<platform::multi_pins_uvc_device>(devs),
-                std::unique_ptr<frame_timestamp_reader>(new ds5_timestamp_reader_from_metadata(std::move(host_timestamp_reader_backup))),
+                std::unique_ptr<frame_timestamp_reader>(new ds_timestamp_reader_from_metadata(std::move(host_timestamp_reader_backup))),
                 this);
             auto color_ep = std::make_shared<platform_camera_sensor>(this, raw_color_ep);
             add_sensor(color_ep);
 
             register_info(RS2_CAMERA_INFO_NAME, "Platform Camera");
-            std::string pid_str(to_string() << std::setfill('0') << std::setw(4) << std::hex << uvc_infos.front().pid);
+            std::string pid_str( rsutils::string::from()
+                                 << std::setfill( '0' ) << std::setw( 4 ) << std::hex << uvc_infos.front().pid );
             std::transform(pid_str.begin(), pid_str.end(), pid_str.begin(), ::toupper);
 
             using namespace platform;
@@ -336,8 +297,8 @@ namespace librealsense
 
         if (mask & RS2_PRODUCT_LINE_D400)
         {
-            auto ds5_devices = ds5_info::pick_ds5_devices(ctx, devices);
-            std::copy(begin(ds5_devices), end(ds5_devices), std::back_inserter(list));
+            auto d400_devices = d400_info::pick_d400_devices(ctx, devices);
+            std::copy(begin(d400_devices), end(d400_devices), std::back_inserter(list));
         }
 
         if( mask & RS2_PRODUCT_LINE_L500 )
@@ -352,13 +313,6 @@ namespace librealsense
             std::copy(begin(sr300_devices), end(sr300_devices), std::back_inserter(list));
         }
 
-#ifdef WITH_TRACKING
-        if (mask & RS2_PRODUCT_LINE_T200)
-        {
-            auto tm2_devices = tm2_info::pick_tm2_devices(ctx, devices.usb_devices);
-            std::copy(begin(tm2_devices), end(tm2_devices), std::back_inserter(list));
-        }
-#endif
         // Supported recovery devices
         if (mask & RS2_PRODUCT_LINE_D400 || mask & RS2_PRODUCT_LINE_SR300 || mask & RS2_PRODUCT_LINE_L500) 
         {
@@ -555,7 +509,8 @@ namespace librealsense
         if (it != _playback_devices.end() && it->second.lock())
         {
             //Already exists
-            throw librealsense::invalid_value_exception(to_string() << "File \"" << file << "\" already loaded to context");
+            throw librealsense::invalid_value_exception( rsutils::string::from()
+                                                         << "File \"" << file << "\" already loaded to context" );
         }
         auto playback_dev = std::make_shared<playback_device>(shared_from_this(), std::make_shared<ros_reader>(file, shared_from_this()));
         auto dinfo = std::make_shared<playback_device_info>(playback_dev);
@@ -573,7 +528,7 @@ namespace librealsense
         if (it != _playback_devices.end() && it->second.lock())
         {
             //Already exists
-            throw librealsense::invalid_value_exception(to_string() << "File \"" << file << "\" already loaded to context");
+            throw librealsense::invalid_value_exception( rsutils::string::from() << "File \"" << file << "\" already loaded to context");
         }
         auto prev_playback_devices = _playback_devices;
         _playback_devices[file] = dev;
@@ -583,7 +538,7 @@ namespace librealsense
     void context::remove_device(const std::string& file)
     {
         auto it = _playback_devices.find(file);
-        if (!it->second.lock() || it == _playback_devices.end())
+        if(it == _playback_devices.end() || !it->second.lock())
         {
             //Not found
             return;
@@ -592,12 +547,6 @@ namespace librealsense
         _playback_devices.erase(it);
         on_device_changed({},{}, prev_playback_devices, _playback_devices);
     }
-
-#if WITH_TRACKING
-    void context::unload_tracking_module()
-    {
-    }
-#endif
 
     std::vector<std::vector<platform::uvc_device_info>> group_devices_by_unique_id(const std::vector<platform::uvc_device_info>& devices)
     {
