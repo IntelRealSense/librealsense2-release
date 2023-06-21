@@ -90,14 +90,15 @@ project( ''' + testname + ''' )
 set( SRC_FILES ''' + filelist + '''
 )
 add_executable( ''' + testname + ''' ${SRC_FILES} )
-source_group( "Common Files" FILES ${ELPP_SOURCES} ${CATCH_FILES} ''' + dir + '''/test.cpp''' )
+source_group( "Common Files" FILES ${CATCH_FILES} ''' + dir + '''/test.cpp''' )
     if not custom_main:
         handle.write( ' ' + dir + '/unit-test-default-main.cpp' )
     handle.write( ''' )
-set_property(TARGET ''' + testname + ''' PROPERTY CXX_STANDARD 11)
-target_link_libraries( ''' + testname + ''' ${DEPENDENCIES})
+target_link_libraries( ''' + testname + ''' ${DEPENDENCIES} )
 
 set_target_properties( ''' + testname + ''' PROPERTIES FOLDER "Unit-Tests/''' + os.path.dirname( testdir ) + '''" )
+
+using_easyloggingpp( ${PROJECT_NAME} SHARED )
 
 # Add the repo root directory (so includes into src/ will be specific: <src/...>)
 target_include_directories(''' + testname + ''' PRIVATE ''' + root + ''')
@@ -124,6 +125,7 @@ def find_include( include, relative_to ):
 
 standard_include_dirs = [
     os.path.join( root, 'include' ),
+    os.path.join( root, 'third-party', 'rsutils', 'include' ),
     root
     ]
 def find_include_in_dirs( include ):
@@ -200,7 +202,7 @@ def process_cpp( dir, builddir ):
 
             # Build the list of files we want in the project:
             # At a minimum, we have the original file, plus any common files
-            filelist = [ dir + '/' + f, '${ELPP_SOURCES}', '${CATCH_FILES}' ]
+            filelist = [ dir + '/' + f, '${CATCH_FILES}' ]
             # Add any "" includes specified in the .cpp that we can find
             includes = find_includes( dir + '/' + f )
             # Add any files explicitly listed in the .cpp itself, like this:
@@ -318,9 +320,6 @@ log.d( 'Creating "' + name + '" project in', cmakefile )
 handle = open( cmakefile, 'w' )
 handle.write( '''
 
-# We make use of ELPP (EasyLogging++):
-include( ''' + dir +  '''/../include/librealsense2/utilities/easylogging/easyloggingpp.cmake )
-include_directories( ${ELPP_INCLUDES} )
 set( CATCH_FILES
     ''' + dir + '''/catch/catch.hpp
 )
@@ -334,7 +333,7 @@ for sdir in normal_tests:
     n_tests += 1
 if len(shared_tests):
     handle.write( 'if(NOT ${BUILD_SHARED_LIBS})\n' )
-    handle.write( '    message( INFO "' + str(len(shared_tests)) + ' shared lib unit-tests will be skipped. Check BUILD_SHARED_LIBS to run them..." )\n' )
+    handle.write( '    message( INFO " ' + str(len(shared_tests)) + ' shared lib unit-tests will be skipped. Check BUILD_SHARED_LIBS to run them..." )\n' )
     handle.write( 'else()\n' )
     for test in shared_tests:
         handle.write( '    add_subdirectory( ' + test + ' )\n' )
@@ -343,7 +342,7 @@ if len(shared_tests):
     handle.write( 'endif()\n' )
 if len(static_tests):
     handle.write( 'if(${BUILD_SHARED_LIBS})\n' )
-    handle.write( '    message( INFO "' + str(len(static_tests)) + ' static lib unit-tests will be skipped. Uncheck BUILD_SHARED_LIBS to run them..." )\n' )
+    handle.write( '    message( INFO " ' + str(len(static_tests)) + ' static lib unit-tests will be skipped. Uncheck BUILD_SHARED_LIBS to run them..." )\n' )
     handle.write( 'else()\n' )
     for test in static_tests:
         handle.write( '    add_subdirectory( ' + test + ' )\n' )
