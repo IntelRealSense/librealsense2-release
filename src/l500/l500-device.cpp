@@ -3,8 +3,6 @@
 
 #include "l500-device.h"
 
-#include <vector>
-
 #include "context.h"
 #include "stream.h"
 #include "image.h"
@@ -13,19 +11,22 @@
 #include "l500-color.h"
 #include "l500-private.h"
 
-#include "proc/decimation-filter.h"
-#include "proc/threshold.h" 
-#include "proc/spatial-filter.h"
-#include "proc/temporal-filter.h"
-#include "proc/hole-filling-filter.h"
-#include "proc/zero-order.h"
-#include "proc/syncer-processing-block.h"
-#include "proc/rotation-transform.h"
-#include "../common/fw/firmware-version.h"
-#include <librealsense2/utilities/time/periodic-timer.h>
-#include <librealsense2/utilities/time/work-week.h>
-#include "../common/utilities/time/l500/get-mfr-ww.h"
+#include <src/proc/decimation-filter.h>
+#include <src/proc/threshold.h>
+#include <src/proc/spatial-filter.h>
+#include <src/proc/temporal-filter.h>
+#include <src/proc/hole-filling-filter.h>
+#include <src/proc/zero-order.h>
+#include <src/proc/syncer-processing-block.h>
+#include <src/proc/rotation-transform.h>
 
+#include <common/fw/firmware-version.h>
+#include <rsutils/time/periodic-timer.h>
+#include <rsutils/time/work-week.h>
+#include <common/utilities/time/l500/get-mfr-ww.h>
+#include <rsutils/string/from.h>
+
+#include <vector>
 
 
 namespace librealsense
@@ -127,7 +128,7 @@ namespace librealsense
                 auto manufacture
                     = utilities::time::l500::get_manufacture_work_week( optic_serial );
                 auto age
-                    = utilities::time::get_work_weeks_since( manufacture );
+                    = rsutils::time::get_work_weeks_since( manufacture );
                 command cmd( fw_cmd::UNIT_AGE_SET, (uint8_t)age );
                 _hw_monitor->send( cmd );
             }
@@ -314,11 +315,6 @@ namespace librealsense
 
     double l500_device::get_device_time_ms()
     {
-        if (dynamic_cast<const platform::playback_backend*>(&(get_context()->get_backend())) != nullptr)
-        {
-            throw not_implemented_exception("device time not supported for backend.");
-        }
-
         if (!_hw_monitor)
             throw wrong_api_call_sequence_exception("_hw_monitor is not initialized yet");
 
@@ -355,12 +351,16 @@ namespace librealsense
             const int MAX_ITERATIONS_FOR_DEVICE_DISCONNECTED_LOOP = DISCONNECT_PERIOD_MS / DELAY_FOR_RETRIES;
             for( auto i = 0; i < MAX_ITERATIONS_FOR_DEVICE_DISCONNECTED_LOOP; i++ )
             {
-                // If the device was detected as removed we assume the device is entering update mode
-                // Note: if no device status callback is registered we will wait the whole time and it is OK
+                // If the device was detected as removed we assume the device is entering update
+                // mode Note: if no device status callback is registered we will wait the whole time
+                // and it is OK
                 if( ! is_valid() )
+                {
+                    this_thread::sleep_for( milliseconds( DELAY_FOR_CONNECTION ) );
                     return;
+                }
 
-                this_thread::sleep_for( milliseconds(DELAY_FOR_RETRIES) );
+                this_thread::sleep_for( milliseconds( DELAY_FOR_RETRIES ) );
             }
 
             if (device_changed_notifications_on())
@@ -439,7 +439,10 @@ namespace librealsense
         for (int sector_index = first_sector; sector_index < sector_count; sector_index++)
         {
             command cmdFES(ivcam2::FES);
-            cmdFES.require_response = false;
+            // On both FES & FWB commands We don't really need the response but we see that setting
+            // false and sending many commands cause a failure. 
+            // Looks like the FW is expecting it.
+            cmdFES.require_response = true;
             cmdFES.param1 = int(sector_index);
             cmdFES.param2 = 1;
             auto res = hwm->send(cmdFES);
@@ -451,7 +454,7 @@ namespace librealsense
                     break;
                 int packet_size = std::min((int)(HW_MONITOR_COMMAND_SIZE - (i % HW_MONITOR_COMMAND_SIZE)), (int)(ivcam2::FLASH_SECTOR_SIZE - i));
                 command cmdFWB(ivcam2::FWB);
-                cmdFWB.require_response = false;
+                cmdFWB.require_response = true;
                 cmdFWB.param1 = int(index);
                 cmdFWB.param2 = packet_size;
                 cmdFWB.data.assign(image.data() + index, image.data() + index + packet_size);
@@ -546,9 +549,9 @@ namespace librealsense
         auto res = hwm.send(cmd);
         if (res.size() < expected_size)
         {
-            throw invalid_value_exception(to_string()
-                << command_name + " FW command failed: size expected: "
-                << expected_size << " , size received: " << res.size());
+            throw invalid_value_exception( rsutils::string::from()
+                                           << command_name + " FW command failed: size expected: " << expected_size
+                                           << " , size received: " << res.size() );
         }
 
         LOG_INFO(command_name << ": " << static_cast<int>(res[0]));
@@ -580,8 +583,8 @@ namespace librealsense
             }
             else
                 throw librealsense::invalid_value_exception(
-                    to_string() << "get-nest command requires FW version >= " << minimal_fw_ver
-                                << ", current version is: " << _fw_version );
+                    rsutils::string::from() << "get-nest command requires FW version >= " << minimal_fw_ver
+                                            << ", current version is: " << _fw_version );
         }
 
         return _hw_monitor->send(input);
@@ -618,10 +621,11 @@ namespace librealsense
             // Verify read
             if (res.size() < expected_size)
             {
-                throw std::runtime_error(
-                    to_string() << "TEMPERATURES_GET - Invalid result size! expected: "
-                    << expected_size << " bytes, "
-                    "got: " << res.size() << " bytes");
+                throw std::runtime_error( rsutils::string::from()
+                                          << "TEMPERATURES_GET - Invalid result size! expected: " << expected_size
+                                          << " bytes, "
+                                             "got: "
+                                          << res.size() << " bytes" );
             }
 
             if (fw_version_support_nest)
@@ -644,7 +648,7 @@ namespace librealsense
                 auto expected_size = fw_version_support_nest ? sizeof( extended_temperatures )
                                                              : sizeof( temperatures );
 
-                utilities::time::periodic_timer second_has_passed(std::chrono::seconds(1));
+                rsutils::time::periodic_timer second_has_passed(std::chrono::seconds(1));
                 second_has_passed.set_expired(); // Force condition true on start
 
 
@@ -656,15 +660,17 @@ namespace librealsense
                         // Verify read
                         if (res.size() < expected_size)
                         {
-                            throw std::runtime_error(
-                                to_string() << "TEMPERATURES_GET - Invalid result size!, expected: "
-                                << expected_size << " bytes, "
-                                "got: " << res.size() << " bytes");
+                            throw std::runtime_error( rsutils::string::from()
+                                                      << "TEMPERATURES_GET - Invalid result size!, expected: "
+                                                      << expected_size
+                                                      << " bytes, "
+                                                         "got: "
+                                                      << res.size() << " bytes" );
                         }
                
                         std::lock_guard<std::mutex> lock(_temperature_mutex);
 
-                        memset(&_temperatures, sizeof(_temperatures), 0);
+                        memset(&_temperatures, 0, sizeof(_temperatures));
                         if (fw_version_support_nest)
                             _temperatures = *reinterpret_cast<extended_temperatures const *>(res.data());
                         else
@@ -706,7 +712,9 @@ namespace librealsense
 
         auto min_max_fw_it = ivcam2::device_to_fw_min_max_version.find(_pid);
         if (min_max_fw_it == ivcam2::device_to_fw_min_max_version.end())
-            throw librealsense::invalid_value_exception(to_string() << "Min and Max firmware versions have not been defined for this device: " << std::hex << _pid);
+            throw librealsense::invalid_value_exception(
+                rsutils::string::from() << "Min and Max firmware versions have not been defined for this device: "
+                                        << std::hex << _pid );
 
         // Limit L515 to FW versions within the 1.5.1.3-1.99.99.99 range to differenciate from the other products
         bool result = (firmware_version(fw_version) >= firmware_version(min_max_fw_it->second.first)) &&
@@ -724,6 +732,9 @@ namespace librealsense
         if (l500_fw_error_report.find(static_cast<uint8_t>(value)) != l500_fw_error_report.end())
             return{ RS2_NOTIFICATION_CATEGORY_HARDWARE_ERROR, value, RS2_LOG_SEVERITY_ERROR, l500_fw_error_report.at(static_cast<uint8_t>(value)) };
 
-        return{ RS2_NOTIFICATION_CATEGORY_HARDWARE_ERROR, value, RS2_LOG_SEVERITY_WARN, (to_string() << "L500 HW report - unresolved type " << value) };
+        return { RS2_NOTIFICATION_CATEGORY_HARDWARE_ERROR,
+                 value,
+                 RS2_LOG_SEVERITY_WARN,
+                 ( rsutils::string::from() << "L500 HW report - unresolved type " << value ) };
     }
 }

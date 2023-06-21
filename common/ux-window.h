@@ -1,3 +1,6 @@
+// License: Apache 2.0. See LICENSE file in root directory.
+// Copyright(c) 2023 Intel Corporation. All Rights Reserved.
+
 #pragma once
 
 #define GLFW_INCLUDE_GLU
@@ -107,7 +110,7 @@ namespace rs2
         std::atomic<bool>        _app_ready;
         std::atomic<bool>        _keep_alive;
         texture_buffer           _splash_tex;
-        utilities::time::stopwatch   _splash_timer;
+        rsutils::time::stopwatch   _splash_timer;
         std::string              _title_str;
         std::vector<std::string> _on_load_message;
         std::mutex               _on_load_message_mtx;
