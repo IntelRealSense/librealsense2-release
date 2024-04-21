@@ -1,0 +1,12 @@
+Source: ros-humble-librealsense2
+Section: misc
+Priority: optional
+Maintainer: LibRealSense ROS Team <librs.ros@intel.com>
+Build-Depends: debhelper (>= 9.0.0), cmake, dkms, git, libgl1-mesa-dev, libglfw3-dev, libglu1-mesa-dev, libssl-dev, libudev-dev, libusb-1.0-0-dev, libx11-dev, pkg-config, udev, ros-humble-ros-workspace
+Homepage: https://github.com/IntelRealSense/librealsense/
+Standards-Version: 3.9.2
+
+Package: ros-humble-librealsense2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libgl1-mesa-dev, libglfw3-dev, libglu1-mesa-dev, libx11-dev, ros-humble-ros-workspace
+Description: Library for controlling and capturing data from the Intel(R) RealSense(TM) D400 devices.
