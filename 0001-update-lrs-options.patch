@@ -1,4 +1,4 @@
-From fa871b9105742a46d312386aae93fb379da0ec92 Mon Sep 17 00:00:00 2001
+From cf916a923947e1a3a18434e5926c63e827e0eb2a Mon Sep 17 00:00:00 2001
 From: SamerKhshiboun <samer.khshiboun@intel.com>
 Date: Wed, 21 Jun 2023 22:18:52 +0300
 Subject: [PATCH] update lrs options
@@ -8,7 +8,7 @@ Subject: [PATCH] update lrs options
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
-index e61f5a2..63d24a7 100644
+index e61f5a20..63d24a75 100644
 --- a/CMake/lrs_options.cmake
 +++ b/CMake/lrs_options.cmake
 @@ -1,4 +1,4 @@
