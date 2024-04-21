@@ -1,3 +1,26 @@
+## librealsense2 (iron) - 2.55.1-1
+
+The packages in the `librealsense2` repository were released into the `iron` distro by running `/usr/bin/bloom-release --ros-distro iron --track iron librealsense2 --edit -d` on `Sun, 21 Apr 2024 11:51:02 -0000`
+
+The `librealsense2` package was released.
+
+Version of package(s) in repository `librealsense2`:
+
+- upstream repository: https://github.com/IntelRealSense/librealsense.git
+- release repository: https://github.com/IntelRealSense/librealsense2-release.git
+- rosdistro version: `2.54.1-2`
+- old version: `2.54.1-2`
+- new version: `2.55.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.12.0`
+- catkin_pkg version: `1.0.0`
+- rosdep version: `0.22.2`
+- rosdistro version: `0.9.0`
+- vcstools version: `0.1.42`
+
+
 ## librealsense2 (humble) - 2.55.1-1
 
 The packages in the `librealsense2` repository were released into the `humble` distro by running `/usr/bin/bloom-release --ros-distro humble --track humble librealsense2 --edit -d` on `Sun, 21 Apr 2024 11:44:52 -0000`
