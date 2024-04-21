@@ -133,7 +133,7 @@ tracks:
     ros_distro: humble
     vcs_type: git
     vcs_uri: https://github.com/IntelRealSense/librealsense.git
-    version: 2.54.1
+    version: 2.55.1
   iron:
     actions:
     - bloom-export-upstream :{vcs_local_uri} :{vcs_type} --tag :{release_tag} --display-uri
