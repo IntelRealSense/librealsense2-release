@@ -5,6 +5,8 @@ on:
     branches: ['**']
   pull_request:
     branches: ['**']
+
+permissions: read-all
      
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)  
@@ -60,9 +62,50 @@ jobs:
       shell: bash
       run: |
         cd ${{env.WIN_BUILD_DIR}}
+        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m
+
+  #--------------------------------------------------------------------------------
+  Win_SH_EX_No_Logs:  # Windows, shared, with Examples & Tools, no EasyLogging and no Check for Updates
+    runs-on: windows-2019
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Enable Long Paths
+      shell: powershell
+      run: |
+       New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+    
+    - name: Check_API
+      shell: bash
+      run: |
+        cd scripts
+        ./api_check.sh
+        cd ..
+
+    - name: PreBuild
+      shell: bash
+      run: |
+       mkdir ${{env.WIN_BUILD_DIR}}
+    
+    - name: Configure CMake
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      shell: bash
+      run: |        
+        LRS_SRC_DIR=$(pwd)
+        cd ${{env.WIN_BUILD_DIR}}
+        pwd
+        ls        
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=false -DBUILD_EASYLOGGINGPP=false
+
+    - name: Build
+      # Build your program with the given configuration
+      shell: bash
+      run: |
+        cd ${{env.WIN_BUILD_DIR}}
         cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -m    
-
-
+        
   #--------------------------------------------------------------------------------
   Win_ST_Py_CI:  # Windows, Static, Python, Tools, libCI with executables
     runs-on: windows-2019
@@ -89,15 +132,16 @@ jobs:
       shell: bash
       run: |
        mkdir ${{env.WIN_BUILD_DIR}}
+       python3 -m pip install numpy
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       shell: bash
       run: |        
-        LRS_SRC_DIR=$(pwd)   
+        LRS_SRC_DIR=$(pwd)
         cd ${{env.WIN_BUILD_DIR}}
-        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DPYTHON_EXECUTABLE=${{env.PYTHON_PATH}} -DBUILD_PYTHON_BINDINGS=true 
+        cmake ${LRS_SRC_DIR} -G "Visual Studio 16 2019" -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=windows" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DPYTHON_EXECUTABLE=${{env.PYTHON_PATH}} -DBUILD_PYTHON_BINDINGS=true 
 
     - name: Build
       # Build your program with the given configuration
@@ -111,6 +155,15 @@ jobs:
       shell: bash
       run: |
         python3 unit-tests/run-unit-tests.py --no-color --debug --stdout --not-live --context "windows" ${{env.WIN_BUILD_DIR}}/Release
+
+    - name: Client for realsense2-all
+      shell: bash
+      run: |
+        mkdir ${{env.WIN_BUILD_DIR}}/rs-all-client
+        cd ${{env.WIN_BUILD_DIR}}/rs-all-client
+        cmake $GITHUB_WORKSPACE/.github/workflows/rs-all-client -G "Visual Studio 16 2019"
+        cmake --build . --config Release -- -m
+        ./Release/rs-all-client
 
 
   #--------------------------------------------------------------------------------
@@ -127,7 +180,7 @@ jobs:
       shell: powershell
       run: |
        New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-
+        
     - name: Check_API
       shell: bash
       run: |
@@ -138,11 +191,10 @@ jobs:
     - name: PreBuild
       shell: bash
       run: |
-       mkdir ${{env.WIN_BUILD_DIR}}
+       mkdir ${{env.WIN_BUILD_DIR}} 
+       python3 -m pip install numpy
 
     - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       shell: bash
       run: |        
         LRS_SRC_DIR=$(pwd)   
@@ -193,8 +245,6 @@ jobs:
        mkdir ${{env.WIN_BUILD_DIR}}
 
     - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       shell: bash
       run: |   
         LRS_SRC_DIR=$(pwd)
@@ -210,8 +260,8 @@ jobs:
 
 
   #--------------------------------------------------------------------------------
-  U20_ST_Py_EX_CfU_LiveTest:  # Ubuntu 2020, Static, Python, Examples & Tools, Check for Updates, Legacy Live-Tests
-    runs-on: ubuntu-20.04    
+  U22_ST_Py_EX_CfU_LiveTest:  # Ubuntu 2022, Static, Python, Examples & Tools, Check for Updates, Legacy Live-Tests
+    runs-on: ubuntu-22.04    
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v3
@@ -222,22 +272,18 @@ jobs:
         cd scripts && ./api_check.sh && cd ..
         mkdir build && cd build
         export LRS_LOG_LEVEL="DEBUG";
-        sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test;
         sudo apt-get update;
         sudo apt-get install -qq build-essential xorg-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglm-dev;
         sudo apt-get install -qq libusb-1.0-0-dev;
         sudo apt-get install -qq libgtk-3-dev;
         sudo apt-get install libglfw3-dev libglfw3;
-        # We force compiling with GCC 7 because the default installed GCC 9 compiled with LTO and gives an internal compiler error
-        sudo apt-get install gcc-7 g++-7;
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7;
     
     - name: Build
       shell: bash
-      run: | 
+      run: |
         cd build
-        cmake .. -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DBUILD_LEGACY_LIVE_TEST=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -j4
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=true -DBUILD_TOOLS=true -DCHECK_FOR_UPDATES=true -DBUILD_LEGACY_LIVE_TEST=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
+        cmake --build . -- -j4
         
     - name: Test
       shell: bash
@@ -245,15 +291,15 @@ jobs:
       # We set continue-on-error: true as a workaround for not skipping the upload log step on failure,
       # The final step will check the return value from the test step and decide if to fail/pass the job
       continue-on-error: true 
-      run: | 
+      run: |
         export LRS_LOG_LEVEL="DEBUG";
-        cd build   
-        ./unit-tests/live-test -d yes -i [software-device]        
+        cd build/${{env.LRS_RUN_CONFIG}}/
+        ./live-test -d yes -i [software-device]        
 
     - name: Upload RS log artifact
       uses: actions/upload-artifact@v3
       with: 
-        name: Log file - U20_ST_Py_EX_CfU_LiveTest
+        name: Log file - U22_ST_Py_EX_CfU_LiveTest
         path: build/*.log
 
     - name: Provide correct exit status for job 
@@ -277,7 +323,6 @@ jobs:
     - name: Prebuild
       shell: bash
       run: |
-        sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test;
         sudo apt-get update;
         sudo apt-get install -qq build-essential xorg-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglm-dev;
         sudo apt-get install -qq libusb-1.0-0-dev;
@@ -286,6 +331,7 @@ jobs:
         # We force compiling with GCC 7 because the default installed GCC 9 compiled with LTO and gives an internal compiler error
         sudo apt-get install gcc-7 g++-7;
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7;
+        python3 -m pip install numpy
 
     - name: Check_API
       shell: bash
@@ -300,8 +346,8 @@ jobs:
       shell: bash
       run: |
         cd build
-        cmake .. -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -j4  
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=true -DUNIT_TESTS_ARGS="--not-live --context=linux" -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=false -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
+        cmake --build . -- -j4  
 
     - name: LibCI
       # Note: requires BUILD_UNIT_TESTS or the executable C++ unit-tests won't run (and it won't complain)
@@ -311,7 +357,7 @@ jobs:
 
 
   #--------------------------------------------------------------------------------
-  U20_ST_Py_DDS_CI:  # Ubuntu 2020, Static, Python, DDS, LibCI without executables
+  U20_ST_Py_DDS_RSUSB_CI:  # Ubuntu 2020, Static, Python, DDS, RSUSB, LibCI without executables
     runs-on: ubuntu-20.04
     timeout-minutes: 60
     steps:
@@ -320,7 +366,6 @@ jobs:
     - name: Prebuild
       shell: bash
       run: |
-        sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test;
         sudo apt-get update;
         sudo apt-get install -qq build-essential xorg-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglm-dev;
         sudo apt-get install -qq libusb-1.0-0-dev;
@@ -329,6 +374,7 @@ jobs:
         # We force compiling with GCC 7 because the default installed GCC 9 compiled with LTO and gives an internal compiler error
         sudo apt-get install gcc-7 g++-7;
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7;
+        python3 -m pip install numpy
 
     - name: Check_API
       shell: bash
@@ -340,28 +386,40 @@ jobs:
         mkdir build
 
     - name: Build
+      # Note: we force RSUSB because, on Linux, the context creation will fail on GHA:
+      #     (backend-v4l2.cpp:555) Cannot access /sys/class/video4linux)
+      # And, well, we don't need any specific platform for DDS!
       shell: bash
       run: |
         cd build
-        cmake .. -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=true -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3)
-        cmake --build . --config ${{env.LRS_RUN_CONFIG}} -- -j4  
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_RUN_CONFIG}} -DBUILD_SHARED_LIBS=false -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DBUILD_UNIT_TESTS=false -DCHECK_FOR_UPDATES=false -DBUILD_WITH_DDS=true -DBUILD_PYTHON_BINDINGS=true -DPYTHON_EXECUTABLE=$(which python3) -DFORCE_RSUSB_BACKEND=true
+        cmake --build . -- -j4
+
+    - name: Client for realsense2-all
+      shell: bash
+      run: |
+        mkdir build/rs-all-client
+        cd build/rs-all-client
+        cmake ../../.github/workflows/rs-all-client -DBUILD_WITH_DDS=ON -DFORCE_RSUSB_BACKEND=ON
+        cmake --build . -- -j4
+        ./rs-all-client
 
     - name: LibCI
       # Note: we specifically disable BUILD_UNIT_TESTS so the executable C++ unit-tests won't run
       # This is to save time as DDS already lengthens the build...
       shell: bash
       run: |
-        python3 unit-tests/run-unit-tests.py --no-color --debug --stdout --not-live --context "dds linux"
+        python3 unit-tests/run-unit-tests.py --no-color --debug --stdout --not-live --context "dds linux" --tag dds
   
 
   #--------------------------------------------------------------------------------
-  U20_SH_RSUSB_LiveTest:  # Ubuntu 2020, Shared, Legacy live-tests
-    runs-on: ubuntu-20.04     
+  U22_SH_RSUSB_LiveTest:  # Ubuntu 2022, Shared, Legacy live-tests
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
     env: 
       LRS_BUILD_NODEJS: true
     steps:
-    - uses: actions/checkout@v3   
+    - uses: actions/checkout@v3
           
     - name: Check_API
       shell: bash
@@ -376,22 +434,18 @@ jobs:
         set -x
         
         mkdir build
-        sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test;
         sudo apt-get update;
         sudo apt-get install -qq build-essential xorg-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglm-dev;
         sudo apt-get install -qq libusb-1.0-0-dev;
         sudo apt-get install -qq libgtk-3-dev;
         sudo apt-get install libglfw3-dev libglfw3;
-        # We force compiling with GCC 7 because the default installed GCC 9 compiled with LTO and gives an internal compiler error
-        sudo apt-get install gcc-7 g++-7;
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7;
 
     - name: Build
       shell: bash
       run: | 
         cd build
-        cmake .. -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DCHECK_FOR_UPDATES=false -DFORCE_RSUSB_BACKEND=true -DBUILD_LEGACY_LIVE_TEST=true
-        cmake --build . --config $LRS_BUILD_CONFIG -- -j4
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_BUILD_CONFIG}} -DBUILD_SHARED_LIBS=true -DBUILD_EXAMPLES=false -DBUILD_TOOLS=false -DCHECK_FOR_UPDATES=false -DFORCE_RSUSB_BACKEND=true -DBUILD_LEGACY_LIVE_TEST=true
+        cmake --build . -- -j4
 
     - name: Test
       shell: bash
@@ -401,13 +455,13 @@ jobs:
       continue-on-error: true 
       run: | 
         export LRS_LOG_LEVEL="DEBUG";
-        cd build   
-        ./unit-tests/live-test -d yes -i [software-device]        
+        cd build/${{env.LRS_BUILD_CONFIG}}/
+        ./live-test -d yes -i [software-device]
 
     - name: Upload RS log artifact
       uses: actions/upload-artifact@v3
-      with: 
-        name: Log file - U20_SH_RSUSB_LiveTest
+      with:
+        name: Log file - U22_SH_RSUSB_LiveTest
         path: build/*.log
 
     - name: Provide correct exit status for job 
@@ -451,8 +505,8 @@ jobs:
         # We use "greadlink -f" which is mac-os parallel command to "readlink -f" from Linux (-f to convert relative link to absolute link)
         export OPENSSL_ROOT_DIR=`greadlink -f /usr/local/opt/openssl@1.1`        
         echo "OPENSSL_ROOT_DIR = ${OPENSSL_ROOT_DIR}"
-        cmake .. -DBUILD_EXAMPLES=true -DBUILD_WITH_OPENMP=false -DHWM_OVER_XU=false -DCHECK_FOR_UPDATES=true
-        cmake --build . --config ${{env.LRS_BUILD_CONFIG}} -- -j4
+        cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_BUILD_CONFIG}} -DBUILD_EXAMPLES=true -DBUILD_WITH_OPENMP=false -DHWM_OVER_XU=false -DCHECK_FOR_UPDATES=true
+        cmake --build . -- -j4
         ls
 
 
@@ -475,7 +529,6 @@ jobs:
         mkdir build
         wget https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip;
         unzip -q android-ndk-r20b-linux-x86_64.zip -d ./;
-        sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test;
         sudo apt-get update;
         sudo apt-get install -qq build-essential xorg-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglm-dev;
         sudo apt-get install -qq libusb-1.0-0-dev;
@@ -489,7 +542,7 @@ jobs:
     - name: Build
       run: |
        cd build
-       cmake .. -DCMAKE_TOOLCHAIN_FILE=../android-ndk-r20b/build/cmake/android.toolchain.cmake -DFORCE_RSUSB_BACKEND=true
-       cmake --build . --config ${{env.LRS_BUILD_CONFIG}} -- -j4
+       cmake .. -DCMAKE_BUILD_TYPE=${{env.LRS_BUILD_CONFIG}} -DCMAKE_TOOLCHAIN_FILE=../android-ndk-r20b/build/cmake/android.toolchain.cmake -DFORCE_RSUSB_BACKEND=true
+       cmake --build . -- -j4
        ls
   
