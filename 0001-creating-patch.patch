@@ -1,0 +1,33 @@
+From 6bdb7b80a032fe04d1ea1a8b2444edda74833ecb Mon Sep 17 00:00:00 2001
+From: SamerKhshiboun <samer.khshiboun@intel.com>
+Date: Sun, 16 Jun 2024 17:22:23 +0000
+Subject: [PATCH] creating patch
+
+---
+ CMake/lrs_options.cmake | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/CMake/lrs_options.cmake b/CMake/lrs_options.cmake
+index be2e2feb..47cff2e9 100644
+--- a/CMake/lrs_options.cmake
++++ b/CMake/lrs_options.cmake
+@@ -1,4 +1,4 @@
+-option(ENABLE_CCACHE "Build with ccache." ON)
++option(ENABLE_CCACHE "Build with ccache." OFF)
+ option(BUILD_WITH_CUDA "Enable CUDA" OFF)
+ option(BUILD_GLSL_EXTENSIONS "Build GLSL extensions API" ON)
+ option(BUILD_WITH_OPENMP "Use OpenMP" OFF)
+@@ -9,8 +9,8 @@ option(COM_MULTITHREADED "Set OFF to initialize COM library with COINIT_APARTMEN
+ option(BUILD_SHARED_LIBS "Build shared library" ON)
+ option(BUILD_UNIT_TESTS "Build LibCI unit tests. If enabled, additional test data may be downloaded" OFF)
+ option(BUILD_LEGACY_LIVE_TEST "Build the live-test.exe test used in Travis. If enabled, additional test data may be downloaded" OFF)
+-option(BUILD_EXAMPLES "Build examples (not including graphical examples -- see BUILD_GRAPHICAL_EXAMPLES)" ON)
+-option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Implies BUILD_GLSL_EXTENSIONS" ON)
++option(BUILD_EXAMPLES "Build examples (not including graphical examples -- see BUILD_GRAPHICAL_EXAMPLES)" OFF)
++option(BUILD_GRAPHICAL_EXAMPLES "Build graphical examples (Viewer & DQT) -- Implies BUILD_GLSL_EXTENSIONS" OFF)
+ option(BUILD_CV_EXAMPLES "Build OpenCV examples" OFF)
+ option(BUILD_DLIB_EXAMPLES "Build DLIB examples - requires DLIB_DIR" OFF)
+ option(BUILD_PCL_EXAMPLES "Build PCL examples" OFF)
+-- 
+2.34.1
+
